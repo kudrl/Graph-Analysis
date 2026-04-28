@@ -4,7 +4,7 @@
 
 Содержит:
 - энтропийные признаки (по степеням, весам, confidence и т.п.);
-- эвристику детекции «взрывного» распада (phase transition) по кривой LCC;
+- эвристику резкого распада сети по скачкам LCC (phase transition heuristic);
 - вспомогательные процедуры для геометрических/кривизностных расчётов.
 """
 
@@ -33,6 +33,7 @@ from .config import (
 from .null import compute_null_threshold
 from .profiling import timeit
 from .utils import as_simple_undirected
+
 
 # -----------------------------
 # Entropy
@@ -66,7 +67,7 @@ def entropy_weights(G: nx.Graph) -> float:
 def entropy_confidence(G: nx.Graph) -> float:
     vals: list[float] = []
     for _, _, d in G.edges(data=True):
-        c = float(d.get("confidence", 1.0))
+        c = float(d.get("confidence", 100.0))
         if np.isfinite(c) and c > 0:
             vals.append(c)
     return entropy_histogram(vals, bins="fd")
@@ -85,7 +86,7 @@ def entropy_triangle_support(G: nx.Graph) -> float:
     return entropy_histogram(ts, bins="fd")
 
 # -----------------------------
-# Phase transition heuristics
+# Phase transition heuristic
 # -----------------------------
 def classify_phase_transition(
     df: pd.DataFrame,
@@ -94,7 +95,7 @@ def classify_phase_transition(
     null_jump_samples: Optional[List[float]] = None,
 ) -> dict:
     """
-    Эвристика «взрывного» распада графа по дискретной кривой LCC.
+    Эвристика резкого распада графа по дискретной кривой LCC.
 
     Идея: находим самый большой отрицательный скачок y между соседними точками.
     Если скачок занимает достаточно большую долю амплитуды (по порогу, оценённому

@@ -163,7 +163,7 @@ def render_null_models(G_view: nx.Graph | None, G_full: nx.Graph | None, met: di
                     G_new = rewire_mix(G_full, p=float(mix_p), seed=int(nm_seed))
                     src_tag = f"MIX(p={mix_p})"
 
-                edges = [[u, v, 1.0, 1.0] for u, v in as_simple_undirected(G_new).edges()]
+                edges = [[u, v, 1.0, 100.0] for u, v in as_simple_undirected(G_new).edges()]
                 df_new = pd.DataFrame(edges, columns=["src", "dst", "weight", "confidence"])
 
                 add_graph_callback(
@@ -367,8 +367,15 @@ def render_attack_lab(G_view: nx.Graph | None, active_entry: GraphEntry, seed_va
                                 msg.caption(f"node attack: {i}/{total}  target_k={k}")
 
                         df_hist, aux = run_attack(
-                            G_view, kind, float(frac), int(steps), int(seed_run), int(eff_k),
-                            rc_frac=0.1, compute_heavy_every=int(heavy_freq),
+                            G_view,
+                            kind,
+                            float(frac),
+                            int(steps),
+                            int(seed_run),
+                            int(eff_k),
+                            rc_frac=0.1,
+                            compute_heavy_every=int(heavy_freq),
+                            fast_mode=fast_mode,
                             progress_cb=_cb,
                         )
                         bar.empty(); msg.empty()
@@ -464,11 +471,11 @@ def render_attack_lab(G_view: nx.Graph | None, active_entry: GraphEntry, seed_va
         ph = last_exp.params.get("phase", {}) if last_exp.params else {}
         if ph:
             st.caption(
-                f"Phase: {'🔥 Abrupt' if ph.get('is_abrupt') else '🌊 Continuous'}"
+                f"Phase transition heuristic: {'Abrupt-like' if ph.get('is_abrupt') else 'Continuous-like'}"
                 f" | critical_x ≈ {float(ph.get('critical_x', 0.0)):.3f}"
             )
 
-        attack_tabs = ["📉 Curves", "🌀 Phase views", "🧊 3D step-by-step"]
+        attack_tabs = ["📉 Curves", "🌀 LCC jump heuristic", "🧊 3D step-by-step"]
         # Stateful selector avoids tab resets when animation uses st.rerun().
         selected_attack_tab = st.radio(
             "Просмотр результатов",
@@ -555,7 +562,7 @@ def render_attack_lab(G_view: nx.Graph | None, active_entry: GraphEntry, seed_va
                 dfp2["l2_lcc"] = pd.to_numeric(dfp2["l2_lcc"], errors="coerce")
                 dfp2 = dfp2.dropna(subset=["mod", "l2_lcc"])
                 if not dfp2.empty:
-                    fig_phase = px.line(dfp2, x="l2_lcc", y="mod", title="Phase portrait (trajectory): Q vs λ₂")
+                    fig_phase = px.line(dfp2, x="l2_lcc", y="mod", title="Heuristic trajectory: Q vs λ₂")
                     fig_phase.update_layout(template="plotly_dark")
                     fig_phase = _apply_plot_defaults(fig_phase, height=780)
                     st.plotly_chart(fig_phase, use_container_width=True, key="plot_phase_portrait")

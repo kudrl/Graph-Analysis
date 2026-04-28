@@ -1,28 +1,16 @@
 from __future__ import annotations
 
 import hashlib
-import logging
-import os
-from pathlib import Path
 
 import networkx as nx
 import numpy as np
 import pandas as pd
 import streamlit as st
+from src.logging_config import configure_logging
 
 # 1) Config & Logging
 #  TODO: вынести логгер в отдельный модуль.
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-logger = logging.getLogger("kodik")
-
-try:
-    _logdir = Path(__file__).resolve().parent / "logs"
-    _logdir.mkdir(parents=True, exist_ok=True)
-    _fh = logging.FileHandler(_logdir / "kodik.log", encoding="utf-8")
-    _fh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
-    logger.addHandler(_fh)
-except Exception:
-    pass
+logger = configure_logging()
 
 st.set_page_config(
     page_title="Kodik Lab",
@@ -440,12 +428,13 @@ if do_ricci:
 
 if ricci_key in st.session_state["__ricci_cache"]:
     curv = st.session_state["__ricci_cache"][ricci_key]
+    summary = curv.get("summary", {})
     met.update(
         {
-            "kappa_mean": curv.get("kappa_mean"),
-            "kappa_median": curv.get("kappa_median"),
-            "kappa_frac_negative": curv.get("kappa_frac_negative"),
-            "fragility_kappa": curv.get("fragility_kappa"),
+            "kappa_mean": summary.get("kappa_mean"),
+            "kappa_median": summary.get("kappa_median"),
+            "kappa_frac_negative": summary.get("kappa_frac_negative"),
+            "fragility_kappa": curv.get("fragility"),
         }
     )
 

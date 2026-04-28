@@ -1,0 +1,7 @@
+user_id,variant,converted,revenue
+u001,control,0,0.00
+u002,control,1,12.00
+u003,treatment,1,15.00
+u004,treatment,0,0.00
+u005,control,0,0.00
+u006,treatment,1,21.00

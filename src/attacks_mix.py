@@ -4,6 +4,7 @@ from __future__ import annotations
 import networkx as nx
 import numpy as np
 import pandas as pd
+
 from .core_math import (
     entropy_confidence,
     entropy_degree,
@@ -28,13 +29,13 @@ def _sample_edge_attrs_from_empirical(
     attrs_pool: list[dict],
 ) -> dict:
     if not attrs_pool:
-        return {"weight": 1.0, "confidence": 1.0}
+        return {"weight": 1.0, "confidence": 100.0}
     d = attrs_pool[int(rng.integers(0, len(attrs_pool)))]
     out = {}
     if "weight" in d:
         out["weight"] = _safe_attr_float(d.get("weight", 1.0))
     if "confidence" in d:
-        out["confidence"] = _safe_attr_float(d.get("confidence", 1.0))
+        out["confidence"] = _safe_attr_float(d.get("confidence", 100.0), 100.0)
     return out
 
 
@@ -94,6 +95,7 @@ def run_mix_attack(
     swaps_per_edge: float = 0.5,
     replace_from: str = "ER",
     progress_cb=None,
+    fast_mode: bool = False,
 ):
 
     rng = np.random.default_rng(int(seed))
@@ -113,7 +115,7 @@ def run_mix_attack(
         attrs_pool.append(
             {
                 "weight": _safe_attr_float(d.get("weight", 1.0), 1.0),
-                "confidence": _safe_attr_float(d.get("confidence", 1.0), 1.0),
+                "confidence": _safe_attr_float(d.get("confidence", 100.0), 100.0),
             }
         )
 

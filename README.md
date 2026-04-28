@@ -1,161 +1,79 @@
+# Kodik Lab
 
+Kodik Lab is an interactive Streamlit prototype for exploring weighted graphs through topology metrics, spectral descriptors, attack simulations, null models and approximate robustness diagnostics.
 
-# Kodik Lab: Интерактивная платформа для анализа топологической устойчивости и динамики сложных сетей
+The app is intended for exploratory graph analysis: load an edge list, filter by confidence and weight, inspect summary metrics, run node/edge attacks, compare simple null models and compute sampled Ollivier-Ricci curvature when needed.
 
-<img width="1287" height="1172" alt="image" src="https://github.com/user-attachments/assets/8a7a8b7c-026b-494e-bafb-2ae2234f281d" />
+## Features
 
-**Kodik Lab** — это аналитический инструмент на базе Streamlit, предназначенный для комплексного исследования структуры графов, моделирования процессов распространения (диффузии) и оценки устойчивости систем к каскадным сбоям.
+- Weighted undirected graph loading from CSV/Excel.
+- Edge filtering by `confidence` and `weight`.
+- Basic topology metrics: node/edge counts, density, connected components, LCC size, clustering and approximate diameter.
+- Spectral descriptors such as weighted adjacency spectral radius and LCC algebraic connectivity.
+- Entropy-style descriptors over degree, weight, confidence and related distributions.
+- Node and edge attack simulations with LCC and metric history.
+- Phase transition heuristic based on sharp LCC jump dynamics.
+- Simple null models: Erdos-Renyi, configuration model and rewiring.
+- Sampled Ollivier-Ricci curvature summaries for interactive use.
+- Toy/proxy energy flow visualizations.
 
-Проект ориентирован на исследовательские задачи в области системного анализа, логистики и сетевой безопасности.
+## Input Format
 
-Ничего скачивать и устанавливать не надо, проект задеплоен на Streamlit [https://kodikk.streamlit.app/]. Образец данных можно посмотреть внизу, но вообще поддерживается генерация пробных данных.
+The normal edge-list format is:
 
-## 🚀 Основные аналитические возможности
+```csv
+src,dst,weight,confidence
+1,2,1.0,100
+2,3,0.8,90
+```
 
-Инструмент разделен на специализированные модули, каждый из которых решает свою задачу анализа:
+`confidence` is expected in 0..100 scale. If it is missing, the default is `100.0`.
 
-### 1. Исследовательский анализ (Dashboard)
-*   **Статистика дескрипторов:** Расчет плотности, коэффициентов кластеризации, среднего пути и диаметра (LCC).
-*   **Спектральный анализ:** Вычисление спектрального радиуса матрицы смежности и алгебраической связности ($\lambda_2$ Лапласиана) для оценки темпов синхронизации и скорости распада сети.
-*   **Информационная энтропия:** Анализ разнообразия ролей узлов через энтропию распределения степеней и весов связей.
-*   
-<img width="1730" height="1101" alt="image" src="https://github.com/user-attachments/assets/8e230eb6-47ec-4ad2-bfaa-c027a6d91878" />
+`weight` is expected to be finite and positive after preprocessing. Weight policy is applied during preprocessing only; graph construction validates that final weights are finite and greater than zero.
 
-### 2. Лаборатория атак и устойчивости (Attack Lab)
-*   **Моделирование деградации:** Симуляция удаления узлов по различным стратегиям (Random, Degree Centrality, Betweenness, High-order Rich-club).
-*   **Детекция фазовых переходов:** Автоматическое определение точки критического распада сети (abrupt vs continuous transition) на основе динамики гигантской компоненты (LCC).
-*   **Сравнение стратегий:** Инструментарий для оценки AUC (Area Under Curve) кривых устойчивости для выбора оптимальной защитной стратегии.
+The fixed connectome-like importer expects source and target in columns 1 and 2, confidence in column 9 and weight in column 10.
 
-### 3. Геометрия и динамика (Energy & Ricci)
-*   **Кривизна Риччи (Ollivier-Ricci Curvature):** Геометрический анализ «узких мест» (bottlenecks) в сети. Отрицательная кривизна подсвечивает ребра-мосты, критичные для связности.
-*   **Energy Flow Simulation:** Моделирование распространения импульсов в сети методами случайных блужданий (Random Walk) и эволюционной энтропии Деметриуса. Визуализация потоков в 3D.
+## Examples
 
-### 4. Статистическая значимость (Null Models)
-*   Генерация эталонных графов (Erdős–Rényi, Configuration Model) для проверки гипотез о неслучайности обнаруженных паттернов.
+Sample files are in `examples/`:
 
-## 🛠 Технологический стек
+- `examples/tiny_graph.csv`
+- `examples/weighted_graph.csv`
+- `examples/connectome_like_edges.csv`
+- `examples/sample_graph_edges.csv`
 
-*   **Язык:** Python
-*   **Библиотеки анализа:** `NetworkX` (графы), `SciPy` (спектральные задачи), `NumPy` & `Pandas` (математика/обработка данных).
-*   **Интерфейс:** `Streamlit` (интерактивный Dashboard).
-*   **Визуализация:** `Plotly` (динамические 3D сцены), `Kaleido` (экспорт графиков).
-*   **Производительность:** `Joblib` (параллельные вычисления Ricci Curvature), кэширование данных через `st.cache_resource`.
+AB Lab-style event samples are also included:
 
-## 🔬 Математический фундамент проекта
+- `examples/events_basic.csv`
+- `examples/events_srm_broken.csv`
+- `examples/events_arpu_heavy_tail.csv`
 
-В основе **Kodik Lab** лежит синтез теории графов, статистической механики и дифференциальной геометрии. Ниже приведено подробное описание используемого аппарата.
+## Run
 
-<details>
-<summary><b>1. Модель данных и препроцессинг</b></summary>
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```
 
-### Представление графа
-Система интерпретирует данные как взвешенный неориентированный граф $G = (V, E)$. Ключевым аспектом является дуализм «Вес — Дистанция»:
-*   **Weight ($w_{ij}$)**: Сила связи (проводимость/интенсивность). Используется в алгоритмах потоков (Energy Flow).
-*   **Distance ($d_{ij}$)**: Геометрическая длина ребра. Рассчитывается как $d_{ij} = 1/w_{ij}$. Используется в расчетах кратчайших путей (Efficiency) и кривизны Риччи.
+For tests:
 
-### Логика обработки
-Система адаптирована под работу с эталонными коннектомами (матрицами связности), где:
-*   **Confidence ($c_{ij}$)**: Частота встречаемости связи в популяции (используется для статистической фильтрации ребер).
-*   **Weight Policy**: Реализованы механизмы нормализации (abs, clip, shift) для корректной работы с отрицательными весами (например, из корреляционных матриц).
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
 
-</details>
+## Limitations
 
-<details>
-<summary><b>2. Глобальная топология и Спектральный анализ</b></summary>
+- Most heavy metrics are approximate or sample-based.
+- Ricci curvature is computed on sampled edges in interactive mode.
+- Phase transition detection is heuristic and based on LCC jump dynamics.
+- Energy flow is a toy/proxy simulation, not a physical simulator.
+- Attack strategies may be static or adaptive depending on mode.
+- The app is intended for exploratory analysis, not final scientific inference without validation.
 
-### Глобальная эффективность (Weighted Efficiency)
-Мера интеграции сети. Вместо классического $O(N^3)$ расчета, реализована стохастическая аппроксимация по $k$ источникам:
-$$E_{glob} \approx \frac{1}{k(N-1)} \sum_{s \in S} \sum_{t \in V \setminus \{s\}} \frac{1}{L_{st}}$$
-*Аналитическая ценность:* Оценка средней скорости передачи импульса в системе.
+## Development Notes
 
-### Спектральные свойства
-Для оценки устойчивости анализируется спектр нормализованного Лапласиана $\mathcal{L} = I - D^{-1/2} A D^{-1/2}$:
-1.  **Алгебраическая связность ($\lambda_2$)**: Скорость распада графа. Чем ближе к 0, тем легче сеть сегментируется.
-2.  **Время релаксации ($\tau_{relax} \approx 1/\lambda_2$)**: Время возврата системы в стабильное состояние после возмущения.
-3.  **Эпидемический порог ($\lambda_{max}$)**: Рассчитывается через спектральный радиус матрицы весов. Определяет критическую точку распространения сигнала: $\text{Threshold} \approx 1/\lambda_{max}$.
-
-</details>
-
-<details>
-<summary><b>3. Робастная геометрия и Информационная энтропия</b></summary>
-
-### Кривизна Оливье-Риччи ($\kappa$)
-Геометрический метод детекции «бутылочных горлышек». Для ребра $(x, y)$ вычисляется транспортное расстояние Вассерштейна $W_1$ между вероятностными мерами соседей:
-$$\kappa(x, y) = 1 - \frac{W_1(\mu_x, \mu_y)}{d(x, y)}$$
-*   **$\kappa < 0$**: Критическое ребро-мост (уязвимость).
-*   **$\kappa > 0$**: Высокая локальная избыточность (надежность).
-
-### Энтропия Деметриуса ($H_{evo}$)
-В отличие от классической энтропии Шеннона, учитывает вклад узлов в глобальную связность через вектор Перрона-Фробениуса $u$:
-$$\hat{P}_{ij} = \frac{a_{ij} u_j}{\lambda u_i} \implies H_{evo} = - \sum_{i} \hat{\pi}_i \sum_{j} \hat{P}_{ij} \log \hat{P}_{ij}$$
-*Аналитическая ценность:* Мера робастности сети к изменению весов связей.
-
-</details>
-
-<details>
-<summary><b>4. Динамика и Теория перколяции (Attack Lab)</b></summary>
-
-### Моделирование потоков (Energy Flow)
-Реализована физическая модель «Давление-Поток»:
-$$F_{ij}(t) = w_{ij} \cdot \left(\frac{E_i(t)}{C_i} - \frac{E_j(t)}{C_j}\right) \cdot dt$$
-Это позволяет имитировать распространение ресурсов или сигналов в условиях ограниченной емкости узлов.
-
-### Анализ фазовых переходов
-Система отслеживает распад гигантской компоненты связности ($P_{\infty}$) и вычисляет восприимчивость $\chi \approx -d P_{\infty}/df$. Это позволяет классифицировать разрушение сети как:
-*   **Continuous**: Плавная деградация.
-*   **Abrupt (1st order)**: Внезапный обвал («взрывная перколяция»), что критично для систем жизнеобеспечения.
-
-</details>
-
-<details>
-<summary><b>5. Оптимизация и Визуализация</b></summary>
-
-### Вычислительные хаки
-*   **Параллелизм:** Расчет Ricci Curvature (сложная задача линейного программирования EMD) распараллелен через `joblib`.
-*   **Визуальный рендеринг:** Для борьбы с «экспоненциальной невидимостью» (доминирование хабов) применены логарифмическое сжатие $\tilde{E}_i = \ln(1 + E_i)$ и квантильное отсечение выбросов (Clipping).
-*   **Layout Caching:** 3D-координаты кэшируются, что позволяет мгновенно переключаться между аналитическими вкладками без пересчета итеративного алгоритма `spring_layout`.
-
-</details>
-
-
-## 📂 О данных
-
-В системе граф представляется как $G = (V, E)$, где:
-*   $V$ — множество узлов ($N = |V|$).
-*   $E$ — множество рёбер ($M = |E|$).
-
-Каждое ребро $(i, j)$ обладает атрибутами:
-1.  **Weight ($w_{ij}$)**: сила связи (проводимость). Если вес не задан, $w_{ij} = 1$.
-2.  **Confidence ($c_{ij}$)**: степень уверенности в связи (используется для фильтрации).
-   Это **частота встречаемости** этой связи у разных людей. 
-    *   Если `confidence = 100`, значит, эта связь была найдена у **всех** 100% обследованных пациентов.
-    *   Если `confidence = 20`, значит, связь есть только у каждого пятого.
-3.  **Distance ($d_{ij}$)**: «геометрическая» длина ребра, обратная весу:
-    $$
-    d_{ij} = \frac{1}{w_{ij}} \quad (\text{если } w_{ij} > 0, \text{ иначе } \infty)
-    $$
-
-При расчетах (Centrality, Efficiency, Ricci) используются именно дистанции $d_{ij}$. Для потоковых алгоритмов используются веса $w_{ij}$.
-
-Структура входных данных:
-
-Система автоматически парсит файлы CSV/Excel, основываясь на позициях колонок, характерных для эталонных коннектомов:
-
-| № колонки | Индекс | Переменная в коде | Атрибут | Описание |
-| :--- | :--- | :--- | :--- | :--- |
-| **1** | `[0]` | `SRC_COL` | **Source** | ID исходного узла (откуда) |
-| **2** | `[1]` | `DST_COL` | **Target** | ID целевого узла (куда) |
-| **9** | `[8]` | `CONF_COL` | **Confidence** | Частота связи (надежность/встречаемость) |
-| **10** | `[9]` | `WEIGHT_COL` | **Weight** | Сила связи (физический вес/проводимость) |
-
-Проект поддерживает автоматическую чистку данных и нормализацию весов (режимы `abs`, `clip`, `shift`).
-
-"Обрразец данных": https://pitgroup.org/connectome/ **Примечание:** Колонки с 3-й по 8-ю (индексы `2–7`) могут содержать дополнительные анатомические или статистические данные, но не используются при построении топологии графа.
-
-Рекомендуется размер графа до 1500-2000 узлов. Расчёт может занимать минуты. Кое-где порядок сложности доходит до O(N^3).
-
-# Ссылки
-https://arxiv.org/abs/1502.04512
-https://www.sciencedirect.com/science/article/pii/S0378437104008288
-https://arxiv.org/abs/0903.0340
-https://arxiv.org/abs/math/0605212
+- `src/preprocess.py` owns weight policy conversion.
+- `src/graph_build.py` only validates final edge weights and confidence values.
+- Tests live in `tests/`.
+- Ruff and pytest settings are in `pyproject.toml`.

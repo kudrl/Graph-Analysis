@@ -2,8 +2,6 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 
-from .config import settings
-from .weights import policy_from_settings, apply_weight_policy_scalar
 from .preprocess import filter_edges
 
 """
@@ -20,6 +18,12 @@ def build_graph_from_edges(
     *,
     strict: bool = True,
 ) -> nx.Graph:
+    df_edges = df_edges.copy()
+    if "weight" not in df_edges.columns:
+        df_edges["weight"] = 1.0
+    if "confidence" not in df_edges.columns:
+        df_edges["confidence"] = 100.0
+
     G = nx.from_pandas_edgelist(
         df_edges,
         source=src_col,
@@ -27,28 +31,25 @@ def build_graph_from_edges(
         edge_attr=["weight", "confidence"],
         create_using=nx.Graph(),
     )
-    pol = policy_from_settings(settings.WEIGHT_POLICY, settings.WEIGHT_EPS, settings.WEIGHT_SHIFT)
     to_drop = []
 
     for u, v, d in G.edges(data=True):
         w_raw = d.get("weight", 1.0)
-        c_raw = d.get("confidence", 0.0)
+        c_raw = d.get("confidence", 100.0)
         try:
             w = float(w_raw)
         except (TypeError, ValueError):
-            w = 1.0
+            w = float("nan")
         try:
             c = float(c_raw)
         except (TypeError, ValueError):
-            c = 0.0
+            c = 100.0
 
-        w2 = apply_weight_policy_scalar(w, pol)
-        if w2 is None:
+        if not np.isfinite(w) or w <= 0:
             if strict:
-                raise ValueError(f"edge weight must be finite and >0 under policy={pol.mode!r}, got {w!r}")
+                raise ValueError(f"edge weight must be finite and > 0, got {w!r}")
             to_drop.append((u, v))
             continue
-        w = float(w2)
         if not np.isfinite(c):
             raise ValueError(f"edge confidence must be finite, got {c!r}")
 
@@ -94,7 +95,7 @@ def graph_to_edge_df(G: nx.Graph) -> pd.DataFrame:
                 "src": int(u) if isinstance(u, (int, np.integer)) else u,
                 "dst": int(v) if isinstance(v, (int, np.integer)) else v,
                 "weight": float(d.get("weight", 1.0)),
-                "confidence": float(d.get("confidence", 1.0)),
+                "confidence": float(d.get("confidence", 100.0)),
             }
         )
     return pd.DataFrame(rows)

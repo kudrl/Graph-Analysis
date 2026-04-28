@@ -283,7 +283,7 @@ def run_edge_attack(
         "strong_edges_by_confidence",
     ):
         if "confidence" in kind:
-            key = lambda e: float(e[2].get("confidence", 1.0))
+            key = lambda e: float(e[2].get("confidence", 100.0))
         else:
             key = lambda e: _safe_float(e[2].get("weight", 1.0), 1.0)
         edges.sort(key=key, reverse=kind.startswith("strong_"))

@@ -8,7 +8,7 @@ from .config import JUMP_ALPHA, JUMP_FRACTION_FALLBACK
 
 
 def compute_null_threshold(jumps: Iterable[float]) -> float:
-    """Возвращает порог фазового перехода на основе выборок скачков нулевой модели"""
+    """Возвращает порог эвристики резкого распада на основе скачков нулевой модели."""
     samples = [float(v) for v in jumps if np.isfinite(v)]
     if not samples:
         return float(JUMP_FRACTION_FALLBACK)
