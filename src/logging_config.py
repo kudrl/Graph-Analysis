@@ -18,6 +18,6 @@ def configure_logging() -> logging.Logger:
             )
             logger.addHandler(file_handler)
         except Exception:
-            pass
+            logger.warning("Failed to configure file logging", exc_info=True)
 
     return logger

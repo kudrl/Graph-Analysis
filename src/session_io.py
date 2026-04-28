@@ -1,15 +1,20 @@
 import base64
 import json
+from contextlib import suppress
 
 import numpy as np
 import pandas as pd
 
+from .io_load import MAX_UPLOAD_BYTES, validate_table_size
 from .state_models import (
     ExperimentEntry,
     GraphEntry,
     build_experiment_entry,
     build_graph_entry,
 )
+
+MAX_WORKSPACE_JSON_BYTES = 25 * 1024 * 1024
+MAX_WORKSPACE_TABLE_BYTES = MAX_UPLOAD_BYTES
 
 
 class GraphDataEncoder(json.JSONEncoder):
@@ -26,11 +31,9 @@ class GraphDataEncoder(json.JSONEncoder):
             return obj.to_list()
         if isinstance(obj, pd.DataFrame):
             return obj.to_dict(orient="records")
-        try:
+        with suppress(TypeError):
             if pd.isna(obj):
                 return None
-        except TypeError:
-            pass
         return super().default(obj)
 
 
@@ -45,7 +48,13 @@ def _df_to_b64_csv(df: pd.DataFrame) -> str:
 
 def _b64_csv_to_df(s: str) -> pd.DataFrame:
     raw = base64.b64decode(s.encode("ascii"))
-    return pd.read_csv(pd.io.common.BytesIO(raw))
+    if len(raw) > MAX_WORKSPACE_TABLE_BYTES:
+        raise ValueError(
+            f"Workspace table is too large: max {MAX_WORKSPACE_TABLE_BYTES // (1024 * 1024)} MB."
+        )
+    df = pd.read_csv(pd.io.common.BytesIO(raw))
+    validate_table_size(df, label="Workspace table")
+    return df
 
 
 def export_workspace_json(graphs: dict, experiments: list[ExperimentEntry]) -> bytes:
@@ -103,6 +112,10 @@ def export_workspace_json(graphs: dict, experiments: list[ExperimentEntry]) -> b
 
 
 def import_workspace_json(blob: bytes) -> tuple[dict[str, GraphEntry], list[ExperimentEntry]]:
+    if len(blob) > MAX_WORKSPACE_JSON_BYTES:
+        raise ValueError(
+            f"Workspace JSON is too large: max {MAX_WORKSPACE_JSON_BYTES // (1024 * 1024)} MB."
+        )
     payload = json.loads(blob.decode("utf-8"))
     graphs_raw = payload.get("graphs", {})
     exps_raw = payload.get("experiments", [])
@@ -171,6 +184,10 @@ def export_experiments_json(experiments: list[ExperimentEntry]) -> bytes:
 
 
 def import_experiments_json(blob: bytes) -> list[ExperimentEntry]:
+    if len(blob) > MAX_WORKSPACE_JSON_BYTES:
+        raise ValueError(
+            f"Experiments JSON is too large: max {MAX_WORKSPACE_JSON_BYTES // (1024 * 1024)} MB."
+        )
     payload = json.loads(blob.decode("utf-8"))
     exps_raw = payload.get("experiments", [])
     exps: list[ExperimentEntry] = []

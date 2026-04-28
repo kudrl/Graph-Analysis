@@ -29,9 +29,11 @@ src,dst,weight,confidence
 
 `confidence` is expected in 0..100 scale. If it is missing, the default is `100.0`.
 
-`weight` is expected to be finite and positive after preprocessing. Weight policy is applied during preprocessing only; graph construction validates that final weights are finite and greater than zero.
+`weight` is expected to be finite and positive after preprocessing/filtering. Weight policy is applied in preprocessing/filtering, before graph construction. Graph construction only validates final weights.
 
 The fixed connectome-like importer expects source and target in columns 1 and 2, confidence in column 9 and weight in column 10.
+
+Interactive uploads are capped at 20 MB, 300,000 rows and 100 columns. Imported workspace JSON files are capped as well, including the decoded tables inside them.
 
 ## Examples
 
@@ -41,12 +43,6 @@ Sample files are in `examples/`:
 - `examples/weighted_graph.csv`
 - `examples/connectome_like_edges.csv`
 - `examples/sample_graph_edges.csv`
-
-AB Lab-style event samples are also included:
-
-- `examples/events_basic.csv`
-- `examples/events_srm_broken.csv`
-- `examples/events_arpu_heavy_tail.csv`
 
 ## Run
 

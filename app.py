@@ -142,12 +142,16 @@ with st.sidebar:
 
             up_ws = st.file_uploader("Load Workspace", type=["json"], key="up_ws")
             if up_ws:
-                gs, ex = import_workspace_json(up_ws.getvalue())
-                st.session_state["graphs"] = gs
-                st.session_state["experiments"] = ex
-                if gs:
-                    ctx.active_graph_id = next(iter(gs.keys()))
-                st.rerun()
+                try:
+                    gs, ex = import_workspace_json(up_ws.getvalue())
+                    st.session_state["graphs"] = gs
+                    st.session_state["experiments"] = ex
+                    if gs:
+                        ctx.active_graph_id = next(iter(gs.keys()))
+                    st.rerun()
+                except Exception as exc:
+                    logger.warning("Workspace import failed", exc_info=True)
+                    st.warning(f"Workspace import failed: {exc}")
 
         with t2:
             if st.button("Export Exps"):
@@ -298,8 +302,9 @@ with st.sidebar:
             try:
                 st.cache_data.clear()
                 st.cache_resource.clear()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("Cache clear failed", exc_info=True)
+                st.warning(f"Cache clear failed: {exc}")
             # ещё и локальное
             st.session_state.pop("__ricci_cache", None)
             st.success("Cache cleared")
@@ -309,8 +314,9 @@ with st.sidebar:
         if st.button("🧨 Trim memory", help="Обрезает лишние графы/экспы (чтобы вкладка не съедала 4ГБ)"):
             try:
                 ctx.trim_memory()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("Memory trim failed", exc_info=True)
+                st.warning(f"Memory trim failed: {exc}")
             st.rerun()
 
     if st.button("🗑️ Reset All", type="primary"):
