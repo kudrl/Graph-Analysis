@@ -4,4 +4,4 @@ import streamlit as st
 
 
 def render(*args, **kwargs):
-    st.markdown("## Kodik Lab")
+    st.markdown("## Graph Lab")

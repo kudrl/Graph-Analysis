@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import networkx as nx
-import streamlit as st
-
 import plotly.express as px
 import plotly.graph_objects as go
+import streamlit as st
 
 from src.services.graph_service import GraphService
 from src.state_models import GraphEntry
@@ -116,7 +115,8 @@ def render(G_view: nx.Graph | None, active_entry: GraphEntry, seed_val: int, src
         )
 
         pb.progress(1.0)
-        pb.empty(); pb_msg.empty()
+        pb.empty()
+        pb_msg.empty()
 
         # 3) Рисуем внутри col_vis_main, чтобы не ломать сетку.
         if node_trace is not None:

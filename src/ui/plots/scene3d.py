@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional, Tuple
 
-import numpy as np
 import networkx as nx
-import plotly.graph_objects as go
+import numpy as np
 import plotly.colors
+import plotly.graph_objects as go
 
 from ...core.physics import compute_energy_flow, simulate_energy_flow
 from ...core_math import ollivier_ricci_edge
@@ -179,7 +179,14 @@ def make_energy_flow_figure_3d(
                         cmax=1.0,
                         opacity=1.0,
                     ),
-                    text=[f"{n}: {e:.2f}" for n, e in zip(np.asarray(nodes, dtype=object)[mask_active], energies[mask_active])],
+                    text=[
+                        f"{n}: {e:.2f}"
+                        for n, e in zip(
+                            np.asarray(nodes, dtype=object)[mask_active],
+                            energies[mask_active],
+                            strict=True,
+                        )
+                    ],
                     hoverinfo="text",
                     name="nodes_core",
                 )
@@ -448,7 +455,6 @@ def make_3d_traces(
             rng = np.random.default_rng(123)
             pick = rng.choice(idx, size=int(max_edges_viz), replace=False)
 
-        pick_set = set(int(i) for i in pick.tolist())
         # Rebuild buckets with picked indices.
         buckets = [[] for _ in range(max(1, bins.size - 1))]
         for i in pick.tolist():

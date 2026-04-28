@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import numpy as np
-import streamlit as st
 import plotly.express as px
+import streamlit as st
 
 from .config_loader import load_css, load_metrics_info
 

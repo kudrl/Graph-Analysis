@@ -24,7 +24,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p = argparse.ArgumentParser(
         prog="kodiklab",
-        description="Kodik Lab: offline runner (metrics / summary) for reproducible experiments.",
+        description="Graph Lab: offline runner (metrics / summary) for reproducible experiments.",
     )
     p.add_argument("input", type=str, help="Path to CSV/Excel edge list")
     p.add_argument(

@@ -1,19 +1,20 @@
 from __future__ import annotations
 
 import hashlib
+import uuid
 
 import networkx as nx
 import numpy as np
 import pandas as pd
 import streamlit as st
+
 from src.logging_config import configure_logging
 
 # 1) Config & Logging
-#  TODO: вынести логгер в отдельный модуль.
 logger = configure_logging()
 
 st.set_page_config(
-    page_title="Kodik Lab",
+    page_title="Graph Lab",
     layout="wide",
     page_icon="🕸️",
     initial_sidebar_state="expanded",
@@ -21,20 +22,20 @@ st.set_page_config(
 st.title("Graph Lab")
 
 from src.config import settings
-from src.io_load import load_edges
-from src.preprocess import coerce_fixed_format
 from src.graph_build import build_graph
+from src.io_load import load_edges
+from src.null_models import make_er_gnm
+from src.preprocess import coerce_fixed_format
 from src.services.graph_service import GraphService
 from src.session_io import export_experiments_json, export_workspace_json, import_workspace_json
 from src.state.session import ctx
 from src.state_models import build_experiment_entry, build_graph_entry
-from src.ui_blocks import inject_custom_css
-
 from src.ui.tabs import attacks as tab_attacks
 from src.ui.tabs import compare as tab_compare
 from src.ui.tabs import dashboard as tab_dashboard
 from src.ui.tabs import energy as tab_energy
 from src.ui.tabs import structure as tab_structure
+from src.ui_blocks import inject_custom_css
 
 inject_custom_css()
 ctx.ensure_initialized()
@@ -43,8 +44,6 @@ ctx.ensure_initialized()
 # --- Helpers ---
 
 def new_id(prefix):
-    import uuid
-
     return f"{prefix}_{uuid.uuid4().hex[:6]}"  # 6 символов — хватает
 
 
@@ -130,7 +129,7 @@ def cached_build_graph(
 # 4) SIDEBAR
 # ============================================================
 with st.sidebar:
-    st.title("🎛️ Kodik Lab")
+    st.title("🎛️ Graph Lab")
 
     with st.expander("📥 Импорт / Экспорт", expanded=False):
         t1, t2 = st.tabs(["Workspace", "Exps"])
@@ -165,7 +164,7 @@ with st.sidebar:
 
     if uploaded_file:
         raw_bytes = uploaded_file.getvalue()
-        file_hash = hashlib.md5(raw_bytes).hexdigest()
+        file_hash = hashlib.sha256(raw_bytes).hexdigest()
 
         if file_hash != st.session_state.get("last_upload_hash"):
             st.session_state["last_upload_hash"] = file_hash
@@ -260,20 +259,19 @@ with st.sidebar:
                     st.rerun()
 
     with st.expander("🎲 Демо граф"):
-        from src.null_models import make_er_gnm
-
         dt = st.selectbox("Тип", ["ER", "Barabasi", "Watts"], key="demo_t")
         if st.button("Создать"):
-            import networkx as nx
+            demo_seed = int(st.session_state.get("__seed_val", settings.DEFAULT_SEED))
+            rng = np.random.default_rng(demo_seed)
 
             if dt == "ER":
-                G0 = make_er_gnm(250, 800, 42)
+                G0 = make_er_gnm(250, 800, demo_seed)
             elif dt == "Barabasi":
-                G0 = nx.barabasi_albert_graph(250, 3)
+                G0 = nx.barabasi_albert_graph(250, 3, seed=demo_seed)
             else:
-                G0 = nx.watts_strogatz_graph(250, 6, 0.1)
+                G0 = nx.watts_strogatz_graph(250, 6, 0.1, seed=demo_seed)
 
-            edges = [[u, v, float(0.1 + 0.9 * np.random.rand()), 100.0] for u, v in G0.edges()]
+            edges = [[u, v, float(0.1 + 0.9 * rng.random()), 100.0] for u, v in G0.edges()]
             df_demo = pd.DataFrame(edges, columns=["src", "dst", "weight", "confidence"])
             add_graph_to_state(f"Demo {dt}", df_demo, "demo", "src", "dst")
             st.rerun()
@@ -368,6 +366,7 @@ with st.sidebar:
     st.session_state["__analysis_mode"] = analysis_mode
 
     seed_val = int(st.number_input("Seed", value=settings.DEFAULT_SEED))
+    st.session_state["__seed_val"] = seed_val
 
     curv_n = int(st.slider("Ricci edges", 20, 300, int(settings.RICCI_SAMPLE_EDGES)))
     do_ricci = st.button("Compute Ricci (slow)")
@@ -515,4 +514,4 @@ elif current_tab == tab_names[5]:
     )
 
 st.markdown("---")
-st.caption("Kodik Лабчик")
+st.caption("Interactive weighted graph exploration")

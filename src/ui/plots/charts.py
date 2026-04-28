@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-AUC_TRAP = getattr(np, "trapezoid", None) or getattr(np, "trapz")
+AUC_TRAP = np.trapezoid if hasattr(np, "trapezoid") else np.trapz
 
 
 def auto_y_range(series: pd.Series, pad_frac: float = 0.08):

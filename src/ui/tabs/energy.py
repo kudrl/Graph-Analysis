@@ -165,9 +165,11 @@ def render(G_view: nx.Graph | None, active_entry: GraphEntry, seed_val: int, src
                 # Streamlit Cloud иногда редактирует текст ошибки. Покажем тип/сообщение явно.
                 st.error(f"Energy 3D render failed: {type(e).__name__}: {e}")
                 st.exception(e)
-                bar.empty(); stage.empty()
+                bar.empty()
+                stage.empty()
                 return
 
         bar.progress(1.0)
-        bar.empty(); stage.empty()
+        bar.empty()
+        stage.empty()
         st.plotly_chart(fig_flow, use_container_width=True, key="plot_energy_flow")

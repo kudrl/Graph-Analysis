@@ -1,6 +1,6 @@
-# Kodik Lab
+# Graph Lab
 
-Kodik Lab is an interactive Streamlit prototype for exploring weighted graphs through topology metrics, spectral descriptors, attack simulations, null models and approximate robustness diagnostics.
+Graph Lab is an interactive Streamlit prototype for exploring weighted graphs through topology metrics, spectral descriptors, attack simulations, null models and approximate robustness diagnostics.
 
 The app is intended for exploratory graph analysis: load an edge list, filter by confidence and weight, inspect summary metrics, run node/edge attacks, compare simple null models and compute sampled Ollivier-Ricci curvature when needed.
 
@@ -73,3 +73,17 @@ pytest
 - `src/graph_build.py` only validates final edge weights and confidence values.
 - Tests live in `tests/`.
 - Ruff and pytest settings are in `pyproject.toml`.
+
+## Refactoring Status
+
+Done:
+
+- Graph construction is separated from preprocessing/filtering.
+- Weight policy is centralized before graph construction.
+- UI tabs, services, state and core graph metrics are separated into `src/` modules.
+
+Remaining:
+
+- Split `src/core_math.py` into narrower curvature, phase, entropy and fragility modules.
+- Split `src/ui/tabs/attacks.py` into controls, null-model panel and results views.
+- Reduce `app.py` to a smaller Streamlit router.

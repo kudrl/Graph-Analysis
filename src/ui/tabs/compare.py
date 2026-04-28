@@ -1,23 +1,29 @@
-from __future__ import annotations
-
 """UI tab for comparing graph metrics and experiment trajectories."""
+
+from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import plotly.express as px
 import streamlit as st
 
-import plotly.express as px
-from src.metrics import calculate_metrics
-from src.preprocess import filter_edges
 from src.graph_build import build_graph_from_edges, lcc_subgraph
+from src.metrics import calculate_metrics
+from src.plotting import fig_compare_attacks
+from src.preprocess import filter_edges
 from src.state_models import GraphEntry
 from src.ui.plots.charts import (
     AUC_TRAP,
+)
+from src.ui.plots.charts import (
     apply_plot_defaults as _apply_plot_defaults,
+)
+from src.ui.plots.charts import (
     auto_y_range as _auto_y_range,
+)
+from src.ui.plots.charts import (
     forward_fill_heavy as _forward_fill_heavy,
 )
-from src.plotting import fig_compare_attacks
 
 
 def render(

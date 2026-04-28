@@ -6,24 +6,30 @@ import time
 import networkx as nx
 import numpy as np
 import pandas as pd
-import streamlit as st
-
 import plotly.express as px
 import plotly.graph_objects as go
+import streamlit as st
 
-from src.config import settings
-from src.null_models import make_er_gnm, make_configuration_model, rewire_mix
 from src.attacks import run_attack, run_edge_attack
 from src.attacks_mix import run_mix_attack
-from src.core_math import classify_phase_transition
 from src.config_loader import load_metrics_info
-from src.plotting import fig_metrics_over_steps, fig_compare_attacks
+from src.core_math import classify_phase_transition
+from src.graph_build import build_graph_from_edges, lcc_subgraph
+from src.null_models import make_configuration_model, make_er_gnm, rewire_mix
+from src.plotting import fig_compare_attacks, fig_metrics_over_steps
+from src.preprocess import filter_edges
 from src.services.graph_service import GraphService
 from src.state_models import GraphEntry
 from src.ui.plots.charts import (
     AUC_TRAP,
+)
+from src.ui.plots.charts import (
     apply_plot_defaults as _apply_plot_defaults,
+)
+from src.ui.plots.charts import (
     auto_y_range as _auto_y_range,
+)
+from src.ui.plots.charts import (
     forward_fill_heavy as _forward_fill_heavy,
 )
 from src.ui.plots.scene3d import make_3d_traces
@@ -71,6 +77,65 @@ ATTACK_PRESETS_EDGE = {
     "Betweenness": {"kind": "edge_betweenness"},
     "Rici (Ollivier)": {"kind": "edge_ricci"},
 }
+
+
+def run_node_attack_suite(
+    G_view: nx.Graph,
+    active_entry: GraphEntry,
+    preset: dict,
+    *,
+    frac: float,
+    steps: int,
+    base_seed: int,
+    eff_k: int,
+    heavy_freq: int,
+    rc_frac: float,
+    tag: str = "",
+) -> list[tuple[str, pd.DataFrame]]:
+    kind = str(preset.get("kind", "random"))
+    df_hist, _aux = run_attack(
+        G_view,
+        kind,
+        float(frac),
+        int(steps),
+        int(base_seed),
+        int(eff_k),
+        rc_frac=float(rc_frac),
+        compute_heavy_every=int(heavy_freq),
+        fast_mode=True,
+    )
+    label = f"{active_entry.name} | node:{kind} | seed={base_seed}"
+    if tag:
+        label += f" [{tag}]"
+    return [(label, _forward_fill_heavy(df_hist))]
+
+
+def run_edge_attack_suite(
+    G_view: nx.Graph,
+    active_entry: GraphEntry,
+    preset: dict,
+    *,
+    frac: float,
+    steps: int,
+    base_seed: int,
+    eff_k: int,
+    heavy_freq: int,
+    tag: str = "",
+) -> list[tuple[str, pd.DataFrame]]:
+    kind = str(preset.get("kind", "edge_random"))
+    df_hist, _aux = run_edge_attack(
+        G_view,
+        kind,
+        float(frac),
+        int(steps),
+        int(base_seed),
+        int(eff_k),
+        compute_heavy_every=int(heavy_freq),
+    )
+    label = f"{active_entry.name} | edge:{kind} | seed={base_seed}"
+    if tag:
+        label += f" [{tag}]"
+    return [(label, _forward_fill_heavy(df_hist))]
 
 def _extract_removed_order(aux):
     if isinstance(aux, dict):
@@ -326,7 +391,8 @@ def render_attack_lab(G_view: nx.Graph | None, active_entry: GraphEntry, seed_va
                             progress_cb=_cb,
                             fast_mode=fast_mode,
                         )
-                        bar.empty(); msg.empty()
+                        bar.empty()
+                        msg.empty()
                         df_hist = _forward_fill_heavy(df_hist)
                         phase_info = classify_phase_transition(
                             df_hist.rename(columns={"mix_frac": "removed_frac"})
@@ -378,7 +444,8 @@ def render_attack_lab(G_view: nx.Graph | None, active_entry: GraphEntry, seed_va
                             fast_mode=fast_mode,
                             progress_cb=_cb,
                         )
-                        bar.empty(); msg.empty()
+                        bar.empty()
+                        msg.empty()
                         df_hist = _forward_fill_heavy(df_hist)
                         removed_order = _extract_removed_order(aux) or _fallback_removal_order(G_view, kind, int(seed_run))
                         phase_info = classify_phase_transition(df_hist)
@@ -426,7 +493,8 @@ def render_attack_lab(G_view: nx.Graph | None, active_entry: GraphEntry, seed_va
                             curvature_sample_edges=int(st.session_state.get("__curvature_sample_edges", 80)),
                             progress_cb=_cb,
                         )
-                        bar.empty(); msg.empty()
+                        bar.empty()
+                        msg.empty()
                         df_hist = _forward_fill_heavy(df_hist)
                         phase_info = classify_phase_transition(df_hist)
 

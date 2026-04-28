@@ -8,7 +8,7 @@ import streamlit as st
 
 from src.state_models import GraphEntry
 from src.ui.plots.charts import apply_plot_defaults
-from src.ui_blocks import render_dashboard_metrics, render_dashboard_charts
+from src.ui_blocks import render_dashboard_charts, render_dashboard_metrics
 
 
 def _node_metrics_df(G: nx.Graph) -> pd.DataFrame:
