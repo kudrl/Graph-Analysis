@@ -35,5 +35,5 @@ def forward_fill_heavy(df_hist: pd.DataFrame) -> pd.DataFrame:
     cols_to_fix = ["l2_lcc", "mod", "H_tri", "eff_w"]
     for col in cols_to_fix:
         if col in df.columns:
-            df[col] = df[col].replace([0, 0.0, np.inf, -np.inf], np.nan).ffill()
+            df[col] = df[col].replace([np.inf, -np.inf], np.nan).ffill()
     return df

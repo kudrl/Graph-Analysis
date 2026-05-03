@@ -74,10 +74,10 @@ def entropy_confidence(G: nx.Graph) -> float:
 
 
 def triangle_support_edge(G: nx.Graph):
-    tri = nx.triangles(G)
+    H = as_simple_undirected(G)
     out = []
-    for u, v in G.edges():
-        out.append(min(tri.get(u, 0), tri.get(v, 0)))
+    for u, v in H.edges():
+        out.append(len(list(nx.common_neighbors(H, u, v))))
     return out
 
 
@@ -114,6 +114,9 @@ def classify_phase_transition(
 
     x = np.asarray(df[x_col], dtype=float)
     y = np.asarray(df[y_col], dtype=float)
+    finite = np.isfinite(x) & np.isfinite(y)
+    x = x[finite]
+    y = y[finite]
 
     if len(x) < 3:
         return {
@@ -125,7 +128,7 @@ def classify_phase_transition(
 
     dy = np.diff(y)
     idx = int(np.argmin(dy))
-    jump = float(-dy[idx])
+    jump = float(max(0.0, -float(dy[idx])))
     y_span = float(max(EPS_W, np.nanmax(y) - np.nanmin(y)))
     jump_fraction = float(jump / y_span)
 
@@ -436,6 +439,11 @@ def evolutionary_entropy_demetrius(G: nx.Graph, base: float = math.e) -> float:
     H = _normalize_edge_weights(as_simple_undirected(G))
     if H.number_of_nodes() < 2 or H.number_of_edges() == 0:
         return float("nan")
+    if not nx.is_connected(H):
+        lcc = max(nx.connected_components(H), key=len)
+        H = H.subgraph(lcc).copy()
+        if H.number_of_nodes() < 2 or H.number_of_edges() == 0:
+            return float("nan")
 
     A = nx.adjacency_matrix(H.to_directed(), weight="weight").astype(float).tocsr()
     if A.nnz == 0:

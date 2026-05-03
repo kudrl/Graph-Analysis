@@ -6,13 +6,31 @@ def make_er_gnm(n: int, m: int, seed: int) -> nx.Graph:
 
 def make_configuration_model(G_base: nx.Graph, seed: int) -> nx.Graph:
     """
-    всё ещё мультиграфы не поддерживаются :(
-    Мы приводим к простому графу.
+    Нулевая модель простого графа с сохранением последовательности степеней.
+
+    Метки исходных узлов сохраняются, чтобы сравнения оставались сопоставимыми.
     """
-    degs = [d for _, d in G_base.degree()]
-    M = nx.configuration_model(degs, seed=int(seed))
-    H = nx.Graph(M)  
-    H.remove_edges_from(nx.selfloop_edges(H))
+    labels = list(G_base.nodes())
+    degs = [int(G_base.degree(n)) for n in labels]
+    if not labels:
+        return nx.Graph()
+    if sum(degs) == 0:
+        H = nx.Graph()
+        H.add_nodes_from(labels)
+        return H
+
+    try:
+        H_idx = nx.random_degree_sequence_graph(degs, seed=int(seed), tries=20)
+    except (nx.NetworkXError, nx.NetworkXUnfeasible):
+        H_idx = nx.havel_hakimi_graph(degs)
+        swaps = max(1, H_idx.number_of_edges() * 3)
+        try:
+            nx.double_edge_swap(H_idx, nswap=swaps, max_tries=swaps * 20, seed=int(seed))
+        except nx.NetworkXError:
+            pass
+
+    mapping = {i: labels[i] for i in range(len(labels))}
+    H = nx.relabel_nodes(H_idx, mapping, copy=True)
     return H
 
 

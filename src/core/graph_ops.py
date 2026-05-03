@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import random
+import warnings
 from typing import Any, Callable
 
 import networkx as nx
@@ -102,7 +103,6 @@ def approx_weighted_efficiency(
     sources = rng.sample(nodes, k)
 
     inv_sum = 0.0
-    cnt = 0
     for s in sources:
         dists = nx.single_source_dijkstra_path_length(H, s, weight="dist")
         for t, d in dists.items():
@@ -110,8 +110,8 @@ def approx_weighted_efficiency(
                 continue
             if d and np.isfinite(d) and d > 0:
                 inv_sum += 1.0 / float(d)
-                cnt += 1
-    return float(inv_sum / cnt) if cnt > 0 else 0.0
+    denom = float(k * max(1, N - 1))
+    return float(inv_sum / denom) if denom > 0 else 0.0
 
 
 def compute_modularity_louvain(G: nx.Graph, seed: int = 0) -> float:
@@ -133,6 +133,18 @@ def degree_entropy(G: nx.Graph) -> float:
     p = counts.astype(float) / float(counts.sum())
     p = p[p > 0]
     return float(-np.sum(p * np.log(p))) if p.size > 0 else 0.0
+
+
+def safe_degree_assortativity(G: nx.Graph) -> float:
+    if G.number_of_nodes() <= 2 or G.number_of_edges() == 0:
+        return 0.0
+    degs = np.array([d for _, d in G.degree()], dtype=float)
+    if degs.size == 0 or float(np.var(degs)) <= 0.0:
+        return 0.0
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        assort = nx.degree_assortativity_coefficient(G)
+    return float(assort) if np.isfinite(assort) else 0.0
 
 
 def approx_diameter_lcc(G: nx.Graph, seed: int = 0, samples: int = 16):
@@ -248,7 +260,7 @@ def calculate_metrics(
         eff_w = float("nan")
 
     ent = degree_entropy(G)
-    assort = nx.degree_assortativity_coefficient(G) if N > 2 and E > 0 else 0.0
+    assort = safe_degree_assortativity(G)
     clust = nx.average_clustering(H_u) if N > 2 and E > 0 else 0.0
     diam = approx_diameter_lcc(G, seed=seed, samples=16)
 
