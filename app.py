@@ -27,6 +27,7 @@ from src.io_load import load_edges
 from src.null_models import make_er_gnm
 from src.preprocess import coerce_fixed_format
 from src.services.graph_service import GraphService
+from src.services.urban_resilience import CITY_PRESETS, city_graph_to_edges, create_city_preset
 from src.session_io import export_experiments_json, export_workspace_json, import_workspace_json
 from src.state.session import ctx
 from src.state_models import build_experiment_entry, build_graph_entry
@@ -35,11 +36,13 @@ from src.ui.tabs import compare as tab_compare
 from src.ui.tabs import dashboard as tab_dashboard
 from src.ui.tabs import energy as tab_energy
 from src.ui.tabs import structure as tab_structure
+from src.ui.tabs import urban as tab_urban
 from src.ui_blocks import inject_custom_css
 
 inject_custom_css()
 ctx.ensure_initialized()
 
+URBAN_TAB_LABEL = "🏙️ Urban"
 
 # --- Helpers ---
 
@@ -76,6 +79,7 @@ def add_graph_to_state(name, df, source, src, dst):
     )
     ctx.set_graph_entry(entry)
     ctx.active_graph_id = gid
+    st.session_state["active_graph_id"] = gid
     return gid
 
 
@@ -259,10 +263,27 @@ with st.sidebar:
                     st.rerun()
 
     with st.expander("🎲 Демо граф"):
-        dt = st.selectbox("Тип", ["ER", "Barabasi", "Watts"], key="demo_t")
+        dt = st.selectbox("Тип", ["Urban", "ER", "Barabasi", "Watts"], key="demo_t")
+        urban_preset = None
+        if dt == "Urban":
+            urban_preset = st.selectbox("Пресет", list(CITY_PRESETS.keys()), key="demo_urban_preset")
         if st.button("Создать"):
             demo_seed = int(st.session_state.get("__seed_val", settings.DEFAULT_SEED))
             rng = np.random.default_rng(demo_seed)
+
+            if dt == "Urban":
+                G0 = create_city_preset(str(urban_preset), seed=demo_seed)
+                df_demo = city_graph_to_edges(G0)
+                add_graph_to_state(
+                    f"Urban {urban_preset}",
+                    df_demo,
+                    "urban_resilience:preset",
+                    "src",
+                    "dst",
+                )
+                st.session_state.pop("urban_last_impact", None)
+                st.session_state["main_tab"] = URBAN_TAB_LABEL
+                st.rerun()
 
             if dt == "ER":
                 G0 = make_er_gnm(250, 800, demo_seed)
@@ -327,6 +348,23 @@ with st.sidebar:
 # ============================================================
 if not ctx.graphs:
     st.warning("Workspace пуст. Загрузите файл или создайте демо-граф в сайдбаре.")
+    empty_preset = st.selectbox("Urban preset", list(CITY_PRESETS.keys()), key="empty_urban_preset")
+    if st.button("Load Urban preset city", type="primary"):
+        urban_graph = create_city_preset(
+            str(empty_preset),
+            seed=int(st.session_state.get("__seed_val", settings.DEFAULT_SEED)),
+        )
+        urban_edges = city_graph_to_edges(urban_graph)
+        add_graph_to_state(
+            f"Urban {empty_preset}",
+            urban_edges,
+            "urban_resilience:preset",
+            "src",
+            "dst",
+        )
+        st.session_state.pop("urban_last_impact", None)
+        st.session_state["main_tab"] = URBAN_TAB_LABEL
+        st.rerun()
     st.stop()
 
 cur_gids = list(ctx.graphs.keys())
@@ -334,6 +372,7 @@ cur_gid = ctx.active_graph_id
 if cur_gid not in cur_gids:
     cur_gid = cur_gids[0]
     ctx.active_graph_id = cur_gid
+    st.session_state["active_graph_id"] = cur_gid
 
 c1, c2, c3 = st.columns([3, 1, 1])
 with c1:
@@ -345,6 +384,7 @@ with c1:
     )
     if sel != cur_gid:
         ctx.active_graph_id = sel
+        st.session_state["active_graph_id"] = sel
         st.rerun()
 
 active_entry = ctx.graphs[cur_gid]
@@ -447,8 +487,16 @@ if ricci_key in st.session_state["__ricci_cache"]:
 # ============================================================
 # 7) TABS ROUTER
 # ============================================================
-tab_names = ["📊 Дэшборд", "⚡ Energy", "🕸️ 3D", "🧪 Null", "💥 Attack", "🆚 Compare"]
-current_tab = st.radio("Разделы", tab_names, horizontal=True, label_visibility="collapsed")
+tab_names = ["📊 Дэшборд", URBAN_TAB_LABEL, "⚡ Energy", "🕸️ 3D", "🧪 Null", "💥 Attack", "🆚 Compare"]
+if st.session_state.get("main_tab") not in tab_names:
+    st.session_state["main_tab"] = tab_names[0]
+current_tab = st.radio(
+    "Разделы",
+    tab_names,
+    horizontal=True,
+    label_visibility="collapsed",
+    key="main_tab",
+)
 
 st.markdown("---")
 
@@ -456,6 +504,9 @@ if current_tab == tab_names[0]:
     tab_dashboard.render(G_view, met, active_entry)
 
 elif current_tab == tab_names[1]:
+    tab_urban.render(active_entry, seed_val, add_graph_to_state)
+
+elif current_tab == tab_names[2]:
     tab_energy.render(
         G_view,
         active_entry,
@@ -467,7 +518,7 @@ elif current_tab == tab_names[1]:
         analysis_mode,
     )
 
-elif current_tab == tab_names[2]:
+elif current_tab == tab_names[3]:
     tab_structure.render(
         G_view,
         active_entry,
@@ -479,7 +530,7 @@ elif current_tab == tab_names[2]:
         analysis_mode,
     )
 
-elif current_tab == tab_names[3]:
+elif current_tab == tab_names[4]:
     tab_attacks.render_null_models(
         G_view,
         G_full,
@@ -489,7 +540,7 @@ elif current_tab == tab_names[3]:
         add_graph_callback=add_graph_to_state,
     )
 
-elif current_tab == tab_names[4]:
+elif current_tab == tab_names[5]:
     tab_attacks.render_attack_lab(
         G_view,
         active_entry,
@@ -502,7 +553,7 @@ elif current_tab == tab_names[4]:
         save_experiment_callback=save_experiment_to_state,
     )
 
-elif current_tab == tab_names[5]:
+elif current_tab == tab_names[6]:
     tab_compare.render(
         G_view,
         active_entry,
