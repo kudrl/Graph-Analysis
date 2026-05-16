@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import io
+import json
+import zipfile
 from dataclasses import dataclass
 from math import hypot
 from typing import Iterable
@@ -16,7 +19,7 @@ RESOURCE_TYPES = {
 }
 
 CITY_PRESETS: dict[str, dict[str, int]] = {
-    "Compact city": {
+    "Компактный город": {
         "grid_size": 3,
         "homes": 8,
         "hospitals": 1,
@@ -25,7 +28,7 @@ CITY_PRESETS: dict[str, dict[str, int]] = {
         "shelters": 1,
         "bridge_count": 2,
     },
-    "River bottleneck": {
+    "Город с мостами": {
         "grid_size": 4,
         "homes": 14,
         "hospitals": 1,
@@ -34,7 +37,7 @@ CITY_PRESETS: dict[str, dict[str, int]] = {
         "shelters": 1,
         "bridge_count": 6,
     },
-    "Service hub": {
+    "Сервисный центр": {
         "grid_size": 5,
         "homes": 22,
         "hospitals": 2,
@@ -43,7 +46,7 @@ CITY_PRESETS: dict[str, dict[str, int]] = {
         "shelters": 2,
         "bridge_count": 4,
     },
-    "Sparse suburbs": {
+    "Разреженные пригороды": {
         "grid_size": 6,
         "homes": 30,
         "hospitals": 1,
@@ -54,6 +57,25 @@ CITY_PRESETS: dict[str, dict[str, int]] = {
     },
 }
 
+ML_FEATURE_COLUMNS = [
+    "degree",
+    "degree_norm",
+    "strength",
+    "strength_norm",
+    "betweenness",
+    "closeness",
+    "clustering",
+    "pagerank",
+    "eigenvector",
+    "core_number",
+    "core_number_norm",
+    "local_density",
+    "energy_final",
+    "energy_peak_pressure",
+    "energy_cumulative_inflow",
+    "energy_overload_risk",
+]
+
 
 @dataclass(frozen=True)
 class FailurePlan:
@@ -63,7 +85,14 @@ class FailurePlan:
 
 
 def create_city_preset(preset_name: str, *, seed: int = 42) -> nx.Graph:
-    params = CITY_PRESETS.get(str(preset_name), CITY_PRESETS["Compact city"])
+    aliases = {
+        "Compact city": "Компактный город",
+        "River bottleneck": "Город с мостами",
+        "Service hub": "Сервисный центр",
+        "Sparse suburbs": "Разреженные пригороды",
+    }
+    preset_key = aliases.get(str(preset_name), str(preset_name))
+    params = CITY_PRESETS.get(preset_key, CITY_PRESETS["Компактный город"])
     return generate_city_graph(**params, seed=int(seed))
 
 
@@ -419,36 +448,36 @@ def build_failure_plan(
     rng = np.random.default_rng(int(seed))
     count = max(1, int(count))
 
-    if scenario == "Remove selected object" and selected_object:
-        return FailurePlan(f"Removed {selected_object}", removed_nodes=(str(selected_object),))
+    if scenario in ("Удалить выбранный объект", "Remove selected object") and selected_object:
+        return FailurePlan(f"Удалён объект {selected_object}", removed_nodes=(str(selected_object),))
 
-    if scenario == "Random accident":
+    if scenario in ("Случайная авария", "Серия отказов", "Random accident"):
         nodes = list(graph.nodes())
         if not nodes:
-            return FailurePlan("Random accident")
+            return FailurePlan(str(scenario))
         picked = rng.choice(nodes, size=min(count, len(nodes)), replace=False)
-        return FailurePlan("Random accident", removed_nodes=tuple(map(str, np.atleast_1d(picked))))
+        return FailurePlan(str(scenario), removed_nodes=tuple(map(str, np.atleast_1d(picked))))
 
-    if scenario == "High-degree attack":
+    if scenario in ("Атака на самые связные объекты", "High-degree attack"):
         nodes = sorted(graph.nodes(), key=lambda node: graph.degree(node), reverse=True)
-        return FailurePlan("High-degree attack", removed_nodes=tuple(map(str, nodes[:count])))
+        return FailurePlan("Атака на самые связные объекты", removed_nodes=tuple(map(str, nodes[:count])))
 
-    if scenario == "Bridge/bottleneck attack":
+    if scenario in ("Атака на мосты и узкие места", "Bridge/bottleneck attack"):
         edges = _rank_bottleneck_edges(graph)
         return FailurePlan(
-            "Bridge/bottleneck attack",
+            "Атака на мосты и узкие места",
             removed_edges=tuple((str(u), str(v)) for u, v in edges[:count]),
         )
 
-    if scenario == "Category outage":
+    if scenario in ("Отключить категорию объектов", "Category outage"):
         nodes = [
             str(node)
             for node, data in graph.nodes(data=True)
             if data.get("type") == str(category)
         ]
-        return FailurePlan(f"{category} outage", removed_nodes=tuple(nodes))
+        return FailurePlan(f"Отключена категория: {_human_node_type(category)}", removed_nodes=tuple(nodes))
 
-    if scenario == "Flood lower district":
+    if scenario in ("Затопить нижний район", "Flood lower district"):
         y_values = [float(data.get("y", 0.0)) for _, data in graph.nodes(data=True)]
         cutoff = float(np.quantile(y_values, 0.35)) if y_values else 0.0
         nodes = [
@@ -456,9 +485,9 @@ def build_failure_plan(
             for node, data in graph.nodes(data=True)
             if float(data.get("y", 0.0)) <= cutoff
         ]
-        return FailurePlan("Flood lower district", removed_nodes=tuple(nodes))
+        return FailurePlan("Затопление нижнего района", removed_nodes=tuple(nodes))
 
-    return FailurePlan("No failure")
+    return FailurePlan("Без отказа")
 
 
 def simulate_failure_impact(graph: nx.Graph, plan: FailurePlan) -> dict[str, object]:
@@ -474,13 +503,13 @@ def simulate_failure_impact(graph: nx.Graph, plan: FailurePlan) -> dict[str, obj
         int(after["power_people_without_access"]),
     )
     severity_value = unavailable_people / population
-    severity = "Low"
+    severity = "низкий"
     if severity_value >= 0.5:
-        severity = "Critical"
+        severity = "критический"
     elif severity_value >= 0.25:
-        severity = "High"
+        severity = "высокий"
     elif severity_value >= 0.1:
-        severity = "Medium"
+        severity = "средний"
 
     return {
         "plan": plan,
@@ -495,22 +524,22 @@ def format_impact_report(impact: dict[str, object]) -> str:
     before = impact["before"]
     after = impact["after"]
     plan: FailurePlan = impact["plan"]
-    lines = [f"Failure impact: {impact['severity']}", "", f"Scenario: {plan.label}"]
-    lines.append(_delta_line("people without hospital access", before, after, "hospital"))
-    lines.append(_delta_line("people without shelter access", before, after, "shelter"))
-    lines.append(_delta_line("people without power access", before, after, "power"))
-    lines.append(_delta_line("homes without food access", before, after, "food", people=False))
+    lines = [f"Ущерб от отказа: {impact['severity']}", "", f"Сценарий: {plan.label}"]
+    lines.append(_delta_line("людей без доступа к больнице", before, after, "hospital"))
+    lines.append(_delta_line("людей без доступа к убежищу", before, after, "shelter"))
+    lines.append(_delta_line("людей без доступа к электричеству", before, after, "power"))
+    lines.append(_delta_line("домов без доступа к складу/магазину", before, after, "food", people=False))
     lines.append(
-        "- average path to hospital: "
+        "- средний путь до больницы: "
         f"{before['hospital_avg_distance']:.1f} -> {after['hospital_avg_distance']:.1f}"
     )
     lines.append(
-        "- isolated home clusters: "
+        "- изолированных жилых кластеров: "
         f"{before['isolated_home_clusters']} -> {after['isolated_home_clusters']}"
     )
     reason = explain_failure_reason(plan, before, after)
     if reason:
-        lines.extend(["", "Reason:", reason])
+        lines.extend(["", "Причина:", reason])
     return "\n".join(lines)
 
 
@@ -550,7 +579,7 @@ def recommend_intervention(graph: nx.Graph, impact: dict[str, object]) -> dict[s
 
     if best is None:
         return {
-            "action": "No obvious intervention",
+            "action": "Нет очевидного вмешательства: сеть уже компенсирует этот отказ",
             "before": baseline,
             "after": baseline,
             "robustness_before": _robustness_score(baseline),
@@ -559,7 +588,7 @@ def recommend_intervention(graph: nx.Graph, impact: dict[str, object]) -> dict[s
 
     home, target, state = best
     return {
-        "action": f"Add backup road between {home} and {target}",
+        "action": f"Построить резервную дорогу между {home} и {target}",
         "before": baseline,
         "after": state,
         "robustness_before": _robustness_score(baseline),
@@ -571,9 +600,19 @@ def city_damage_dataset(graph: nx.Graph, *, max_nodes: int = 250) -> pd.DataFram
     nodes = list(graph.nodes())[: int(max_nodes)]
     base_lcc = _largest_component_size(graph)
     degree = dict(graph.degree())
+    n_norm = max(1, graph.number_of_nodes() - 1)
+    strength = dict(graph.degree(weight="weight"))
+    max_strength = max(strength.values(), default=0.0)
     betweenness = nx.betweenness_centrality(graph, weight="weight", normalized=True)
-    closeness = nx.closeness_centrality(graph, distance="weight")
+    closeness = nx.closeness_centrality(graph)
     pagerank = nx.pagerank(graph, weight="weight") if graph.number_of_nodes() else {}
+    clustering = nx.clustering(graph, weight="weight") if graph.number_of_edges() else {}
+    eigenvector = _safe_eigenvector_centrality(graph)
+    try:
+        core_number = nx.core_number(graph)
+    except nx.NetworkXException:
+        core_number = {node: 0 for node in graph.nodes()}
+    max_core = max(core_number.values(), default=0)
     rows = []
     for node in nodes:
         plan = FailurePlan(f"remove {node}", removed_nodes=(str(node),))
@@ -585,12 +624,28 @@ def city_damage_dataset(graph: nx.Graph, *, max_nodes: int = 250) -> pd.DataFram
         after = impact["after"]
         rows.append(
             {
+                "graph_id": graph.graph.get("graph_id", "urban_graph"),
                 "node": str(node),
+                "graph_family": "urban_resilience",
+                "graph_n_nodes": graph.number_of_nodes(),
+                "graph_n_edges": graph.number_of_edges(),
                 "node_type": graph.nodes[node].get("type", "node"),
                 "degree": int(degree.get(node, 0)),
+                "degree_norm": float(degree.get(node, 0) / n_norm),
+                "strength": float(strength.get(node, 0.0)),
+                "strength_norm": float(strength.get(node, 0.0) / max(max_strength, 1e-12)),
                 "betweenness": float(betweenness.get(node, 0.0)),
                 "closeness": float(closeness.get(node, 0.0)),
+                "clustering": float(clustering.get(node, 0.0)),
                 "pagerank": float(pagerank.get(node, 0.0)),
+                "eigenvector": float(eigenvector.get(node, 0.0)),
+                "core_number": float(core_number.get(node, 0)),
+                "core_number_norm": float(core_number.get(node, 0) / max(max_core, 1)),
+                "local_density": _local_density(graph, node),
+                "energy_final": 0.0,
+                "energy_peak_pressure": 0.0,
+                "energy_cumulative_inflow": 0.0,
+                "energy_overload_risk": 0.0,
                 "damage_score": float(damage),
                 "severity": impact["severity"],
                 "hospital_people_without_access": int(after["hospital_people_without_access"]),
@@ -598,7 +653,92 @@ def city_damage_dataset(graph: nx.Graph, *, max_nodes: int = 250) -> pd.DataFram
                 "power_people_without_access": int(after["power_people_without_access"]),
             }
         )
-    return pd.DataFrame(rows).sort_values("damage_score", ascending=False)
+    frame = pd.DataFrame(rows).sort_values("damage_score", ascending=False)
+    if frame.empty:
+        return frame
+    threshold = float(frame["damage_score"].quantile(0.8))
+    frame["critical"] = (frame["damage_score"] >= threshold).astype(int)
+    ordered = [
+        "graph_id",
+        "node",
+        "graph_family",
+        "graph_n_nodes",
+        "graph_n_edges",
+        "node_type",
+        *ML_FEATURE_COLUMNS,
+        "damage_score",
+        "critical",
+        "severity",
+        "hospital_people_without_access",
+        "shelter_people_without_access",
+        "power_people_without_access",
+    ]
+    return frame[ordered]
+
+
+def build_ml_handoff_bundle(
+    graph: nx.Graph,
+    *,
+    graph_name: str,
+    max_nodes: int = 250,
+) -> bytes:
+    dataset = city_damage_dataset(graph, max_nodes=max_nodes)
+    edges = city_graph_to_edges(graph)
+    nodes = city_nodes_frame(graph)
+    roads = city_edges_frame(graph)
+    manifest = {
+        "name": str(graph_name),
+        "source": "graf_lab_urban_resilience",
+        "target_repository": "graph-vulnerability-gnn",
+        "graph_family": "urban_resilience",
+        "files": {
+            "city_damage_dataset.csv": "Таблица узлов: признаки, damage_score и critical для ML.",
+            "city_graph_edges.csv": "Взвешенный typed-граф городской сети.",
+            "city_nodes.csv": "Сущности города и их атрибуты.",
+            "city_roads.csv": "Дороги и мосты с временем пути, ёмкостью и хрупкостью.",
+        },
+        "ml_columns": {
+            "features": ML_FEATURE_COLUMNS,
+            "target": "damage_score",
+            "classification_target": "critical",
+            "group": "graph_id",
+        },
+        "notes": [
+            "Скопируйте содержимое архива в graph-vulnerability-gnn/data/raw/urban_resilience/.",
+            "Energy-колонки сейчас экспортируются как нулевые заглушки; при необходимости пересчитайте их в ML-проекте.",
+            "damage_score считается как потеря крупнейшей компоненты связности после удаления узла.",
+        ],
+    }
+    readme = """# Передача данных Urban Resilience в ML
+
+Этот архив экспортирован из Graph Lab.
+
+Рекомендуемая папка в `graph-vulnerability-gnn`:
+
+```text
+data/raw/urban_resilience/
+```
+
+Файлы:
+
+- `city_damage_dataset.csv`: таблица узлов с признаками, `damage_score` и `critical`.
+- `city_graph_edges.csv`: typed weighted graph из городского симулятора.
+- `city_nodes.csv`: сущности города и атрибуты.
+- `city_roads.csv`: дороги и мосты.
+- `ml_manifest.json`: схема и пояснения для переноса.
+
+Используйте `damage_score` для регрессии, а `critical` для классификации.
+"""
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("city_damage_dataset.csv", dataset.to_csv(index=False))
+        archive.writestr("city_graph_edges.csv", edges.to_csv(index=False))
+        archive.writestr("city_nodes.csv", nodes.to_csv(index=False))
+        archive.writestr("city_roads.csv", roads.to_csv(index=False))
+        archive.writestr("ml_manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
+        archive.writestr("README.md", readme)
+    return buffer.getvalue()
 
 
 def _node_columns(prefix: str, data: dict) -> dict:
@@ -688,14 +828,14 @@ def explain_failure_reason(
     after: dict[str, float | int],
 ) -> str:
     if plan.removed_edges:
-        return "Removed road or bridge edges were bottlenecks between homes and critical services."
+        return "Удалённые дороги или мосты были узкими местами между домами и критическими сервисами."
     if after["isolated_home_clusters"] > before["isolated_home_clusters"]:
-        return "The failure split residential areas into more disconnected components."
+        return "Отказ разделил жилые районы на большее число несвязанных компонентов."
     if after["hospital_people_without_access"] > before["hospital_people_without_access"]:
-        return "Hospital access depends on the removed object or its surrounding roads."
+        return "Доступ к больнице зависел от удалённого объекта или ближайших дорог."
     if after["power_people_without_access"] > before["power_people_without_access"]:
-        return "Power access has low redundancy around the removed object."
-    return "The network kept most service access, so the failure was absorbed by alternative routes."
+        return "У электроснабжения мало резервных маршрутов вокруг удалённого объекта."
+    return "Сеть сохранила доступ к большинству сервисов за счёт альтернативных маршрутов."
 
 
 def _candidate_interventions(graph: nx.Graph) -> list[tuple[str, str]]:
@@ -726,6 +866,33 @@ def _rank_bottleneck_edges(graph: nx.Graph) -> list[tuple[str, str]]:
     scores = nx.edge_betweenness_centrality(graph, weight="weight", normalized=True)
     ranked = sorted(scores, key=scores.get, reverse=True)
     return [(str(u), str(v)) for u, v in ranked]
+
+
+def _safe_eigenvector_centrality(graph: nx.Graph) -> dict:
+    try:
+        return nx.eigenvector_centrality_numpy(graph, weight="weight")
+    except (nx.NetworkXException, np.linalg.LinAlgError, TypeError, ValueError):
+        return {node: 0.0 for node in graph.nodes()}
+
+
+def _local_density(graph: nx.Graph, node) -> float:
+    neighbors = set(graph.neighbors(node))
+    neighbors.add(node)
+    if len(neighbors) < 3:
+        return 0.0
+    return float(nx.density(graph.subgraph(neighbors)))
+
+
+def _human_node_type(node_type: str) -> str:
+    labels = {
+        "intersection": "перекрёсток",
+        "home": "дом",
+        "hospital": "больница",
+        "power_plant": "электростанция",
+        "warehouse": "склад",
+        "shelter": "убежище",
+    }
+    return labels.get(str(node_type), str(node_type))
 
 
 def _nodes_by_type(graph: nx.Graph, node_type: str) -> list[str]:

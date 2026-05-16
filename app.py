@@ -42,7 +42,7 @@ from src.ui_blocks import inject_custom_css
 inject_custom_css()
 ctx.ensure_initialized()
 
-URBAN_TAB_LABEL = "🏙️ Urban"
+URBAN_TAB_LABEL = "🏙️ Город"
 
 # --- Helpers ---
 
@@ -263,19 +263,19 @@ with st.sidebar:
                     st.rerun()
 
     with st.expander("🎲 Демо граф"):
-        dt = st.selectbox("Тип", ["Urban", "ER", "Barabasi", "Watts"], key="demo_t")
+        dt = st.selectbox("Тип", ["Город", "ER", "Barabasi", "Watts"], key="demo_t")
         urban_preset = None
-        if dt == "Urban":
+        if dt == "Город":
             urban_preset = st.selectbox("Пресет", list(CITY_PRESETS.keys()), key="demo_urban_preset")
         if st.button("Создать"):
             demo_seed = int(st.session_state.get("__seed_val", settings.DEFAULT_SEED))
             rng = np.random.default_rng(demo_seed)
 
-            if dt == "Urban":
+            if dt == "Город":
                 G0 = create_city_preset(str(urban_preset), seed=demo_seed)
                 df_demo = city_graph_to_edges(G0)
                 add_graph_to_state(
-                    f"Urban {urban_preset}",
+                    f"Город: {urban_preset}",
                     df_demo,
                     "urban_resilience:preset",
                     "src",
@@ -348,15 +348,15 @@ with st.sidebar:
 # ============================================================
 if not ctx.graphs:
     st.warning("Workspace пуст. Загрузите файл или создайте демо-граф в сайдбаре.")
-    empty_preset = st.selectbox("Urban preset", list(CITY_PRESETS.keys()), key="empty_urban_preset")
-    if st.button("Load Urban preset city", type="primary"):
+    empty_preset = st.selectbox("Городской шаблон", list(CITY_PRESETS.keys()), key="empty_urban_preset")
+    if st.button("Загрузить городской шаблон", type="primary"):
         urban_graph = create_city_preset(
             str(empty_preset),
             seed=int(st.session_state.get("__seed_val", settings.DEFAULT_SEED)),
         )
         urban_edges = city_graph_to_edges(urban_graph)
         add_graph_to_state(
-            f"Urban {empty_preset}",
+            f"Город: {empty_preset}",
             urban_edges,
             "urban_resilience:preset",
             "src",

@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import zipfile
+from io import BytesIO
+
 from src.services.urban_resilience import (
     FailurePlan,
     add_city_entity,
     apply_city_entity_edits,
+    build_ml_handoff_bundle,
     city_damage_dataset,
     city_edges_frame,
     city_graph_from_edges,
@@ -36,8 +40,8 @@ def test_failure_impact_reports_access_loss() -> None:
     report = format_impact_report(impact)
 
     assert impact["after"]["hospital_people_without_access"] > 0
-    assert "Failure impact" in report
-    assert "hospital access" in report
+    assert "Ущерб от отказа" in report
+    assert "доступа к больнице" in report
 
 
 def test_damage_dataset_and_intervention_are_non_empty() -> None:
@@ -49,11 +53,14 @@ def test_damage_dataset_and_intervention_are_non_empty() -> None:
 
     assert not dataset.empty
     assert "damage_score" in dataset.columns
+    assert "critical" in dataset.columns
+    assert "graph_id" in dataset.columns
+    assert "strength_norm" in dataset.columns
     assert intervention["action"]
 
 
 def test_city_preset_can_be_edited_and_extended() -> None:
-    graph = create_city_preset("Compact city", seed=10)
+    graph = create_city_preset("Компактный город", seed=10)
     nodes = city_nodes_frame(graph)
     edges = city_edges_frame(graph)
 
@@ -74,3 +81,17 @@ def test_city_preset_can_be_edited_and_extended() -> None:
     assert any(data.get("edge_type") == "bridge" for _, _, data in edited.edges(data=True))
     assert "H_extra" in added
     assert added.degree("H_extra") == 1
+
+
+def test_ml_handoff_bundle_contains_transfer_materials() -> None:
+    graph = create_city_preset("Компактный город", seed=11)
+    bundle = build_ml_handoff_bundle(graph, graph_name="Город: Компактный город")
+
+    with zipfile.ZipFile(BytesIO(bundle)) as archive:
+        names = set(archive.namelist())
+        assert "city_damage_dataset.csv" in names
+        assert "city_graph_edges.csv" in names
+        assert "city_nodes.csv" in names
+        assert "city_roads.csv" in names
+        assert "ml_manifest.json" in names
+        assert "README.md" in names
