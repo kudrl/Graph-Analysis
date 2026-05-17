@@ -35,6 +35,7 @@ from src.ui.tabs import attacks as tab_attacks
 from src.ui.tabs import compare as tab_compare
 from src.ui.tabs import dashboard as tab_dashboard
 from src.ui.tabs import energy as tab_energy
+from src.ui.tabs import layers as tab_layers
 from src.ui.tabs import structure as tab_structure
 from src.ui.tabs import urban as tab_urban
 from src.ui_blocks import inject_custom_css
@@ -487,7 +488,16 @@ if ricci_key in st.session_state["__ricci_cache"]:
 # ============================================================
 # 7) TABS ROUTER
 # ============================================================
-tab_names = ["📊 Дэшборд", URBAN_TAB_LABEL, "⚡ Energy", "🕸️ 3D", "🧪 Null", "💥 Attack", "🆚 Compare"]
+tab_names = [
+    "📊 Дэшборд",
+    URBAN_TAB_LABEL,
+    "Layers",
+    "⚡ Energy",
+    "🕸️ 3D",
+    "🧪 Null",
+    "💥 Attack",
+    "🆚 Compare",
+]
 if st.session_state.get("main_tab") not in tab_names:
     st.session_state["main_tab"] = tab_names[0]
 current_tab = st.radio(
@@ -507,6 +517,15 @@ elif current_tab == tab_names[1]:
     tab_urban.render(active_entry, seed_val, add_graph_to_state)
 
 elif current_tab == tab_names[2]:
+    tab_layers.render(
+        active_entry,
+        seed_val,
+        min_conf,
+        min_weight,
+        analysis_mode,
+    )
+
+elif current_tab == tab_names[3]:
     tab_energy.render(
         G_view,
         active_entry,
@@ -518,7 +537,7 @@ elif current_tab == tab_names[2]:
         analysis_mode,
     )
 
-elif current_tab == tab_names[3]:
+elif current_tab == tab_names[4]:
     tab_structure.render(
         G_view,
         active_entry,
@@ -530,7 +549,7 @@ elif current_tab == tab_names[3]:
         analysis_mode,
     )
 
-elif current_tab == tab_names[4]:
+elif current_tab == tab_names[5]:
     tab_attacks.render_null_models(
         G_view,
         G_full,
@@ -540,7 +559,7 @@ elif current_tab == tab_names[4]:
         add_graph_callback=add_graph_to_state,
     )
 
-elif current_tab == tab_names[5]:
+elif current_tab == tab_names[6]:
     tab_attacks.render_attack_lab(
         G_view,
         active_entry,
@@ -553,7 +572,7 @@ elif current_tab == tab_names[5]:
         save_experiment_callback=save_experiment_to_state,
     )
 
-elif current_tab == tab_names[6]:
+elif current_tab == tab_names[7]:
     tab_compare.render(
         G_view,
         active_entry,
