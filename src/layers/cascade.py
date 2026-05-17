@@ -3,8 +3,8 @@ from __future__ import annotations
 import networkx as nx
 import pandas as pd
 
-from src.core.physics import simulate_energy_flow
 from src.domain import AugmentedGraph, GraphCore, LayerConfig, LayerResult, RunContext
+from src.services.flow_service import FlowService
 
 from .base import BaseLayer
 
@@ -94,12 +94,13 @@ def _overloaded_nodes(
 ) -> list:
     if graph.number_of_nodes() == 0:
         return []
-    node_frames, _edge_frames = simulate_energy_flow(
+    flow = FlowService.run_flow(
         graph,
         steps=int(flow_steps),
         flow_mode=str(flow_mode),
         damping=float(damping),
     )
+    node_frames = flow.node_frames
     if not node_frames:
         return []
     capacity = dict(graph.degree(weight="weight"))

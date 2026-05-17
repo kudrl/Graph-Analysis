@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import zipfile
 from io import BytesIO
 
@@ -163,6 +164,32 @@ def test_attack_flow_and_ricci_layers_return_expected_shapes() -> None:
     assert "kappa_mean" in augmented.graph_metrics
 
 
+def test_attack_simulation_layer_supports_edge_family() -> None:
+    augmented = LayerService.run_layers(
+        make_entry(),
+        min_conf=50.0,
+        min_weight=0.0,
+        analysis_mode="Global",
+        seed=1,
+        config=LayerService.default_config(
+            core_metrics=False,
+            node_metrics=False,
+            edge_metrics=False,
+            attack_simulation=True,
+            attack_family="edge",
+            attack_kind="weak_edges_by_weight",
+            attack_steps=3,
+        ),
+    )
+
+    result = augmented.layers["attack_simulation"]
+    assert result.status == "success"
+    assert result.artifacts["attack_family"] == "edge"
+    assert result.artifacts["attack_kind"] == "weak_edges_by_weight"
+    assert "removed_edges_order" in result.artifacts
+    assert "attack_family" in augmented.temporal_states.columns
+
+
 def test_layer_service_cascade_returns_states_and_metrics() -> None:
     augmented = LayerService.run_layers(
         make_entry(),
@@ -270,12 +297,88 @@ def test_ml_export_layer_generic_and_urban_artifacts() -> None:
             node_metrics=True,
             edge_metrics=True,
             ml_export=True,
+            vulnerability=False,
             betweenness_samples=2,
         ),
     )
+    assert generic.layers["ml_export"].status == "skipped"
+    assert "damage_score is required" in generic.layers["ml_export"].warnings[0]
+
+    generic = LayerService.run_layers(
+        make_entry(),
+        min_conf=50.0,
+        min_weight=0.0,
+        analysis_mode="Global",
+        seed=1,
+        config=LayerService.default_config(
+            core_metrics=False,
+            node_metrics=True,
+            edge_metrics=True,
+            vulnerability=True,
+            ml_export=True,
+            betweenness_samples=2,
+            vulnerability_top_frac=0.5,
+        ),
+    )
+    artifacts = generic.layers["ml_export"].artifacts
     assert generic.layers["ml_export"].status == "success"
-    assert "node_attributes_csv" in generic.layers["ml_export"].artifacts
-    assert "edge_attributes_csv" in generic.layers["ml_export"].artifacts
+    assert {
+        "ml_handoff_zip",
+        "node_dataset_csv",
+        "features_nodes_csv",
+        "labels_nodes_csv",
+        "edge_attributes_csv",
+        "metadata_json",
+        "readme_md",
+    }.issubset(artifacts)
+    with zipfile.ZipFile(BytesIO(artifacts["ml_handoff_zip"])) as archive:
+        assert {
+            "node_dataset.csv",
+            "features_nodes.csv",
+            "labels_nodes.csv",
+            "edge_attributes.csv",
+            "metadata.json",
+            "README.md",
+        }.issubset(archive.namelist())
+        node_dataset = pd.read_csv(archive.open("node_dataset.csv"))
+        metadata = json.loads(archive.read("metadata.json").decode("utf-8"))
+    expected_columns = {
+        "graph_id",
+        "node",
+        "graph_family",
+        "graph_n_nodes",
+        "graph_n_edges",
+        "degree",
+        "degree_norm",
+        "strength",
+        "strength_norm",
+        "betweenness",
+        "closeness",
+        "clustering",
+        "pagerank",
+        "eigenvector",
+        "core_number",
+        "core_number_norm",
+        "local_density",
+        "energy_final",
+        "energy_peak_pressure",
+        "energy_cumulative_inflow",
+        "energy_overload_risk",
+        "damage_score",
+        "critical",
+    }
+    assert expected_columns.issubset(node_dataset.columns)
+    assert node_dataset["damage_score"].ge(0).all()
+    assert set(node_dataset["critical"].unique()).issubset({0, 1})
+    assert node_dataset[[
+        "energy_final",
+        "energy_peak_pressure",
+        "energy_cumulative_inflow",
+        "energy_overload_risk",
+    ]].eq(0.0).all().all()
+    assert metadata["target_repository"] == "graph-vulnerability-gnn"
+    assert metadata["flow_features_source"] == "missing_filled_zero"
+    assert metadata["label_definition"].startswith("damage_score = LCC_fraction_before")
 
     city_graph = create_city_preset("Compact city", seed=2)
     city_entry = build_graph_entry(
@@ -323,6 +426,7 @@ def test_layers_ui_state_key_changes_with_filters_seed_and_config() -> None:
         betweenness_samples=10,
         edge_light_limit=100,
         attack_kind="degree",
+        attack_family="node",
         attack_steps=3,
         flow_mode="rw",
         flow_steps=3,

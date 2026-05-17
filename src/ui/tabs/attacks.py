@@ -10,14 +10,13 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from src.attacks import run_attack, run_edge_attack
-from src.attacks_mix import run_mix_attack
 from src.config_loader import load_metrics_info
 from src.core_math import classify_phase_transition
 from src.graph_build import build_graph_from_edges, lcc_subgraph
 from src.null_models import make_configuration_model, make_er_gnm, rewire_mix
 from src.plotting import fig_compare_attacks, fig_metrics_over_steps
 from src.preprocess import filter_edges
+from src.services.attack_service import AttackService
 from src.services.graph_service import GraphService
 from src.state_models import GraphEntry
 from src.ui.plots.charts import (
@@ -60,23 +59,9 @@ METRIC_HELP = _info.get("metric_help", {})
 
 # presets moved out of app.py
 ATTACK_PRESETS_NODE = {
-    "Random": {"kind": "random"},
-    "Degree": {"kind": "degree"},
-    "Strength": {"kind": "strength"},
-    "Betweenness": {"kind": "betweenness"},
-    "Closeness": {"kind": "closeness"},
-    "Eigenvector": {"kind": "eigenvector"},
-    "PageRank": {"kind": "pagerank"},
-    "Katz": {"kind": "katz"},
-    "k-core": {"kind": "kcore"},
-    "Community bridge": {"kind": "community_bridge"},
+    label: {"kind": kind} for label, kind in AttackService.node_presets.items()
 }
-ATTACK_PRESETS_EDGE = {
-    "Random": {"kind": "edge_random"},
-    "Weight": {"kind": "edge_weight"},
-    "Betweenness": {"kind": "edge_betweenness"},
-    "Rici (Ollivier)": {"kind": "edge_ricci"},
-}
+ATTACK_PRESETS_EDGE = {label: {"kind": kind} for label, kind in AttackService.edge_presets.items()}
 
 
 def run_node_attack_suite(
@@ -93,7 +78,7 @@ def run_node_attack_suite(
     tag: str = "",
 ) -> list[tuple[str, pd.DataFrame]]:
     kind = str(preset.get("kind", "random"))
-    df_hist, _aux = run_attack(
+    df_hist, _aux = AttackService.run_node_attack(
         G_view,
         kind,
         float(frac),
@@ -122,8 +107,8 @@ def run_edge_attack_suite(
     heavy_freq: int,
     tag: str = "",
 ) -> list[tuple[str, pd.DataFrame]]:
-    kind = str(preset.get("kind", "edge_random"))
-    df_hist, _aux = run_edge_attack(
+    kind = str(preset.get("kind", "weak_edges_by_weight"))
+    df_hist, _aux = AttackService.run_edge_attack(
         G_view,
         kind,
         float(frac),
@@ -377,7 +362,7 @@ def render_attack_lab(G_view: nx.Graph | None, active_entry: GraphEntry, seed_va
                             if x is not None:
                                 msg.caption(f"mix: {i}/{total}  mix_frac={x:.3f}")
 
-                        df_hist, aux = run_mix_attack(
+                        df_hist, aux = AttackService.run_mix_attack(
                             G_view,
                             kind=str(kind),
                             steps=int(steps),
@@ -432,7 +417,7 @@ def render_attack_lab(G_view: nx.Graph | None, active_entry: GraphEntry, seed_va
                             if k is not None:
                                 msg.caption(f"node attack: {i}/{total}  target_k={k}")
 
-                        df_hist, aux = run_attack(
+                        df_hist, aux = AttackService.run_node_attack(
                             G_view,
                             kind,
                             float(frac),
@@ -486,7 +471,7 @@ def render_attack_lab(G_view: nx.Graph | None, active_entry: GraphEntry, seed_va
                             if k is not None:
                                 msg.caption(f"edge attack: {i}/{total}  target_edges={k}")
 
-                        df_hist, aux = run_edge_attack(
+                        df_hist, aux = AttackService.run_edge_attack(
                             G_view, kind, float(frac), int(steps), int(seed_run), int(eff_k),
                             compute_heavy_every=int(heavy_freq),
                             compute_curvature=bool(st.session_state.get("__compute_curvature", False)),

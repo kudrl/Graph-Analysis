@@ -86,6 +86,7 @@ class LayerService:
         betweenness_samples: int = 100,
         edge_betweenness_max_edges_light: int = 500,
         attack_kind: str = "degree",
+        attack_family: str = "node",
         attack_remove_frac: float = 0.2,
         attack_steps: int = 10,
         flow_mode: str = "rw",
@@ -117,6 +118,7 @@ class LayerService:
             "attack_simulation": LayerConfig(
                 enabled=bool(attack_simulation),
                 params={
+                    "attack_family": str(attack_family),
                     "attack_kind": str(attack_kind),
                     "remove_frac": float(attack_remove_frac),
                     "steps": int(attack_steps),
@@ -153,7 +155,7 @@ class LayerService:
             ),
             "ml_export": LayerConfig(
                 enabled=bool(ml_export),
-                params={"max_nodes": int(urban_max_nodes)},
+                params={"max_nodes": int(urban_max_nodes), "critical_top_frac": float(vulnerability_top_frac)},
                 heavy=False,
             ),
             "vulnerability": LayerConfig(

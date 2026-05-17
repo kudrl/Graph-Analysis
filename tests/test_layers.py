@@ -9,11 +9,13 @@ from src.layers import (
     BaseLayer,
     CoreMetricsLayer,
     EdgeMetricsLayer,
+    FlowLayer,
     LayerRegistry,
     LayerRunner,
     NodeMetricsLayer,
     VulnerabilityLayer,
 )
+from src.services.flow_service import FlowService
 
 
 def make_core() -> GraphCore:
@@ -190,6 +192,16 @@ def test_runner_success_path_with_mvp_layers() -> None:
     assert {"degree", "strength", "betweenness_approx", "pagerank", "core_number"}.issubset(
         augmented.node_attributes.columns
     )
+    ml_columns = {
+        "degree_norm",
+        "strength_norm",
+        "closeness",
+        "eigenvector",
+        "core_number_norm",
+        "local_density",
+    }
+    assert ml_columns.issubset(augmented.node_attributes.columns)
+    assert augmented.node_attributes[list(ml_columns)].apply(pd.to_numeric, errors="coerce").notna().all().all()
     assert len(augmented.edge_attributes) == 2
     assert {"distance", "is_bridge", "edge_betweenness_approx"}.issubset(
         augmented.edge_attributes.columns
@@ -261,6 +273,7 @@ def test_vulnerability_exact_path_graph_labels_center_as_most_critical() -> None
     assert bool(nodes.loc["b", "is_critical_top_k"]) is True
     assert "edge_damage_score" in augmented.edge_attributes.columns
     assert augmented.edge_attributes["edge_damage_score"].notna().all()
+    assert nodes.loc["b", "damage_score"] == pytest.approx(2 / 3)
 
 
 def test_vulnerability_fallback_marks_partial_and_scores_candidates_only() -> None:
@@ -297,3 +310,54 @@ def test_vulnerability_fallback_marks_partial_and_scores_candidates_only() -> No
     assert result.warnings
     assert augmented.node_attributes["damage_score"].notna().sum() == 2
     assert augmented.edge_attributes["edge_damage_score"].notna().sum() == 1
+
+
+def test_vulnerability_uses_ml_lcc_fraction_denominator() -> None:
+    graph = nx.Graph()
+    graph.add_edge("a", "b", weight=1.0, confidence=100.0)
+    graph.add_edge("b", "c", weight=1.0, confidence=100.0)
+    graph.add_edge("x", "y", weight=1.0, confidence=100.0)
+    edges = pd.DataFrame(
+        [{"src": source, "dst": target, "weight": 1.0, "confidence": 100.0} for source, target in graph.edges()]
+    )
+    core = GraphCore("disconnected", "Disconnected", graph, edges, "test", "src", "dst")
+
+    result = VulnerabilityLayer().compute(
+        core,
+        AugmentedGraph(core=core),
+        LayerConfig(enabled=True, params={"max_exact_nodes": 10, "max_exact_edges": 10}),
+        RunContext(seed=1),
+    )
+
+    nodes = result.node_attrs.set_index("node")
+    assert nodes.loc["b", "damage_score"] == pytest.approx(1 / 5)
+    assert result.provenance["label_definition"].startswith("damage_score = LCC_fraction_before")
+
+
+def test_flow_layer_uses_canonical_flow_service_summaries() -> None:
+    core = make_core()
+    config = LayerConfig(
+        enabled=True,
+        params={
+            "flow_mode": "rw",
+            "steps": 3,
+            "damping": 1.0,
+            "sources": ["a"],
+            "phys_injection": 0.15,
+            "phys_leak": 0.02,
+            "phys_cap_mode": "strength",
+            "rw_impulse": True,
+        },
+    )
+
+    result = FlowLayer().compute(core, AugmentedGraph(core=core), config, RunContext(seed=1))
+    expected = FlowService.run_flow(core.nx_graph, **config.params)
+
+    pd.testing.assert_frame_equal(
+        result.node_attrs.sort_values("node").reset_index(drop=True),
+        expected.node_attrs.sort_values("node").reset_index(drop=True),
+    )
+    pd.testing.assert_frame_equal(
+        result.edge_attrs.sort_values(["source", "target"]).reset_index(drop=True),
+        expected.edge_attrs.sort_values(["source", "target"]).reset_index(drop=True),
+    )

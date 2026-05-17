@@ -9,6 +9,8 @@
 - `src/core/physics.py` - динамика распространения энергии и потоков.
 - `src/attacks.py` - удаление узлов и ребер, построение кривых устойчивости.
 - `src/attacks_mix.py` - смешанные атаки и перемешивание структуры.
+- `src/services/attack_service.py` - единый сервисный контракт для node/edge/mix атак.
+- `src/services/flow_service.py` - единый сервисный контракт для energy-flow кадров, summary-таблиц и overload-полей.
 - `src/null_models.py` - простые нулевые модели.
 - `src/weights.py`, `src/preprocess.py`, `src/graph_build.py` - подготовка весов и построение графа.
 
@@ -30,6 +32,32 @@ $$
 В основной ветке вычислений граф приводится к простому неориентированному графу `networkx.Graph`. Если на вход попадает ориентированный граф, он рассматривается как неориентированный. Если на вход попадает мультиграф, параллельные ребра склеиваются: веса суммируются, а первый набор остальных атрибутов сохраняется.
 
 Практический смысл: большинство метрик в проекте интерпретируют связь как симметричную. Направленные потоки, асимметричные связи и несколько разных типов ребер между одной парой узлов в текущей математической модели не представлены как отдельные сущности.
+
+## 1.1. Основной Graph Lab и `[EXPERIMENTAL] Urban`
+
+Основная математическая модель проекта - это анализ взвешенного графа: метрики структуры, спектральные показатели, энтропии, Ricci summary, energy-flow модели, атаки и нулевые модели.
+
+`[EXPERIMENTAL] Urban sandbox` - прикладная typed-graph надстройка. В ней узлы и ребра получают городские типы (`home`, `hospital`, `power_plant`, `road`, `bridge`) и дополнительные атрибуты для сценариев доступа к сервисам и отказов инфраструктуры. Эти поля используются в отдельной городской логике и ML-экспорте, но не меняют базовые определения основной графовой лаборатории.
+
+Подробное описание Urban-слоёв, city schema, `UrbanLayer` и Urban ML handoff вынесено отдельно: [docs/urban_layers.md](urban_layers.md).
+
+## 1.2. Единый контракт Attack / Energy / Layers
+
+После введения layer pipeline в проекте есть два разных уровня:
+
+- пользовательские лаборатории: `Attack Lab` и `Energy`;
+- вычислительные слои: `AttackSimulationLayer`, `FlowLayer`, `CascadeLayer`, `MLExportLayer` и другие.
+
+Они не должны означать две разные математические версии. Сейчас принято такое правило:
+
+- **Attack Lab** остается главным UI для атак: single run, batch, multi-graph compare, phase plots и 3D decomposition.
+- **AttackService** является единственной публичной сервисной точкой для запуска node/edge/mix атак.
+- **AttackSimulationLayer** использует `AttackService` и не вводит отдельную mini-модель атак.
+- **Energy** остается главным UI для интерактивной 3D-анимации потоков.
+- **FlowService** является единственной сервисной точкой для получения `node_frames`, `edge_frames`, summary-атрибутов и `temporal_states`.
+- **FlowLayer** и `GraphService.compute_energy_frames()` используют `FlowService`.
+
+Практический смысл: вкладка `Layers` - это pipeline/attributes/export view. Она может запускать attack/flow слои и отдавать таблицы, artifacts и ML handoff, но не является второй конкурирующей Attack Lab или второй Energy-вкладкой.
 
 ## 2. Атрибуты ребер
 
@@ -682,6 +710,15 @@ $$
 
 ## 21. Energy flow: random walk / evo
 
+Единый runtime-контракт для потоков находится в `FlowService`. Он вызывает `simulate_energy_flow`, а затем строит:
+
+- `node_frames` и `edge_frames` для анимации;
+- node summary: `flow_final`, `flow_peak`, `flow_cumulative`, `flow_load_ratio`, `flow_overload_risk`;
+- edge summary: `flow_flux_final`, `flow_flux_peak`, `flow_flux_cumulative`, `flow_flux_ratio`, `flow_edge_overload_risk`;
+- `temporal_states` с шагом, полной энергией и пиком энергии.
+
+Эти результаты используются Energy UI, `FlowLayer`, `CascadeLayer` и ML handoff. Поэтому поток в слое и поток в визуальной вкладке - это одна модель, а не две независимые реализации.
+
 В режиме random walk строится матрица переходов:
 
 $$
@@ -764,6 +801,14 @@ $$
 ## 23. Node attacks
 
 Атака узлов удаляет часть узлов и пересчитывает метрики на каждом шаге.
+
+Единый runtime-контракт для атак находится в `AttackService`. Он валидирует поддерживаемые `kind` и вызывает:
+
+- `src.attacks.run_attack` для node attacks;
+- `src.attacks.run_edge_attack` для edge attacks;
+- `src.attacks_mix.run_mix_attack` для mix attacks.
+
+`Attack Lab` использует этот сервис для интерактивного UI. `AttackSimulationLayer` использует тот же сервис для layer pipeline, чтобы не создавать отдельную версию атак.
 
 Пусть исходное число узлов:
 
@@ -1032,9 +1077,9 @@ $$
 | Random-walk entropy rate | `src/core_math.py` | `network_entropy_rate` |
 | Demetrius entropy | `src/core_math.py` | `evolutionary_entropy_demetrius` |
 | Ollivier-Ricci | `src/core_math.py` | `ollivier_ricci_edge`, `ollivier_ricci_summary` |
-| Energy flow | `src/core/physics.py` | `simulate_energy_flow`, `compute_energy_flow` |
-| Node/edge attacks | `src/attacks.py` | `run_attack`, `run_edge_attack` |
-| Mix attacks | `src/attacks_mix.py` | `run_mix_attack` |
+| Energy flow backend | `src/services/flow_service.py`, `src/core/physics.py` | `FlowService.run_flow`, `simulate_energy_flow`, `compute_energy_flow` |
+| Attack backend | `src/services/attack_service.py`, `src/attacks.py` | `AttackService`, `run_attack`, `run_edge_attack` |
+| Mix attacks | `src/services/attack_service.py`, `src/attacks_mix.py` | `AttackService.run_mix_attack`, `run_mix_attack` |
 | Null models | `src/null_models.py` | `make_er_gnm`, `make_configuration_model`, `rewire_mix` |
 
 ## 31. Рекомендуемые улучшения математического слоя

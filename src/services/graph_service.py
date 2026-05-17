@@ -7,11 +7,11 @@ import pandas as pd
 
 from ..config import settings
 from ..core.graph_ops import calculate_metrics, compute_3d_layout
-from ..core.physics import simulate_energy_flow
 from ..core_math import fragility_from_curvature, ollivier_ricci_summary
 from ..graph_build import build_graph_from_edges, lcc_subgraph
 from ..graph_wrapper import GraphWrapper
 from ..preprocess import filter_edges
+from .flow_service import FlowService
 
 
 class GraphService:
@@ -95,19 +95,18 @@ class GraphService:
         rw_impulse: bool,
     ) -> tuple[list[dict], list[dict]]:
         G = GraphService.build_graph(edges, src_col, dst_col, min_conf, min_weight, analysis_mode)
-        src_list = list(sources) if sources else None
-        node_frames, edge_frames = simulate_energy_flow(
+        result = FlowService.run_flow(
             G,
             steps=int(steps),
             flow_mode=str(flow_mode),
             damping=float(damping),
-            sources=src_list,
+            sources=list(sources) if sources else None,
             phys_injection=float(phys_injection),
             phys_leak=float(phys_leak),
             phys_cap_mode=str(phys_cap_mode),
             rw_impulse=bool(rw_impulse),
         )
-        return node_frames, edge_frames
+        return result.node_frames, result.edge_frames
 
     @staticmethod
     def compute_layout2d(wrapper: GraphWrapper, seed: int = 0, dim: int = 2) -> dict:

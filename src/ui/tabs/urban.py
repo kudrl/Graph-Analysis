@@ -70,9 +70,15 @@ ENTITY_OPTIONS = {
 }
 
 
+def _open_structure_tab() -> None:
+    st.session_state["main_tab"] = "🕸️ 3D"
+
+
 def render(active_entry: GraphEntry, seed_val: int, add_graph_callback) -> None:
-    st.header("Городская песочница устойчивости")
+    st.header("Городская песочница устойчивости [EXPERIMENTAL]")
     st.caption(
+        "Экспериментальная typed-graph надстройка поверх основного Graph Lab. "
+        "Базовый режим проекта остаётся обычной графовой лабораторией; город нужен для прикладных сценариев доступа и отказов. "
         "Соберите маленький город, запустите отказ и посмотрите, кто теряет доступ "
         "к больнице, убежищу, электричеству и складам. Для ML можно скачать готовый пакет."
     )
@@ -160,6 +166,8 @@ def _render_action_center(graph, active_entry: GraphEntry, seed_val: int) -> Non
         _store_quick_impact(graph, "Затопить нижний район", seed_val)
     if c4.button("Атаковать хабы", use_container_width=True):
         _store_quick_impact(graph, "Атака на самые связные объекты", seed_val, count=3)
+
+    st.button("Открыть этот город в 3D", use_container_width=True, on_click=_open_structure_tab)
 
     impact = st.session_state.get("urban_last_impact")
     if impact:
